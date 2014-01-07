@@ -1,0 +1,239 @@
+#####################################################################
+#
+# File:        ServiceCode.pys
+# Author:   Loek Wensveen
+# Date:      03/01/2014
+# Version: 1.0.0
+# About:        This plugin alows jou to watch itvonline in plex form kpn
+#
+#####################################################################
+
+# no imports
+
+#####################################################################
+
+SUB_DOMEIN = lambda url : SUB_DOMEIN_DICT[DomeinRegex.search(url).group("sub_domein")]
+BASE_URL = lambda url : u"http://%s.itvonline.nl" % SUB_DOMEIN(url)
+API_URL = lambda url : BASE_URL(url) + u"/AVS/besc"
+SEC_BASE_URL = lambda url : u"https://%s.itvonline.nl" % SUB_DOMEIN(url)
+SEC_API_URL = lambda url : SEC_BASE_URL(url) + u"/AVS/besc"
+
+DecryptKeyUrlRegex = Regex('#EXT-X-KEY:METHOD=AES-128,URI="(?P<decrypte_url>.*?)"(?P<playlist_iv>,IV=0x(?P<iv>.*))?')
+BandwidthRegex = Regex('#EXT-X-STREAM-INF:PROGRAM-ID=\d+,BANDWIDTH=(?P<bandwidth>\d+)')
+IdVideoRegex = Regex('/spelen/(?P<id>\d+)')
+IdLiveRegex = Regex('channelId=(?P<id>\d+)')
+DomeinRegex = Regex('http://(?P<sub_domein>.*)\.itvonline\.nl')
+
+SUB_DOMEIN_DICT = {
+    u'www' : u'iphone',
+    u'telfort' : u'telfortiphone'
+}
+
+# not used but usefull
+eHLS_CLIENTS = [
+    ClientPlatform.iOS , 
+    ClientPlatform.Android , 
+    ClientPlatform.Roku,
+    "Web Client",
+    "PlexConnect",
+    "Plex Samsung Smart Hub",
+    "Plex Home Theater"
+]
+
+
+#####################################################################
+
+def NormalizeURL(url):
+    return url
+    
+def MetadataObjectForURL(url):
+    time = int(Datetime.TimestampFromDatetime(Datetime.Now()))
+    prams = {
+        'action' : 'GetEpg',
+        'channel' : 'PCTV',
+        'channelId' : IdLiveRegex.search(url).group("id"),
+        'startTimeStamp': time,
+        'maxResultsPerChannel': 2
+    }
+    dataUrl = buildURL(API_URL(url) , prams)
+    data = JSON.ObjectFromURL(dataUrl)
+    program = data['resultObj']['channelList'][0]['programList'][0]
+    
+    # if the tv program ends in 3 min we show the next program
+    if program['endTime'] < time + 3*60 and len(data['resultObj']['channelList'][0]['programList']) > 1:
+        program = data['resultObj']['channelList'][0]['programList'][1]
+    
+    vc = VideoClipObject(
+        title = program['title'],
+        summary = '%s \n\n%s' %(program['subtitle'] , program['contentDescription']),
+        duration = program['duration'] * 1000 - (time - program['startTime'])
+    )
+    return vc
+    
+def MediaObjectsForURL(url):
+    
+    Log.Info("Returning mediaObject")
+    Log.Info("Client Platform : %s" % Client.Platform)
+    Log.Info("Client Product : %s" % Client.Product)
+    
+    return [
+        MediaObject(
+            container               = 'mpegts',
+            video_codec             = VideoCodec.H264,
+            audio_codec             = AudioCodec.AAC,
+            optimized_for_streaming = True,
+            parts = [
+                PartObject(
+                    key=HTTPLiveStreamURL(Callback(PlayHTTPLiveStream , url=url , ext='m3u8'))
+                )
+             ]
+        )
+    ]
+
+####################################################################################################
+
+def PlayHTTPLiveStream(url):
+
+    if needLoginIphone():
+        try:
+            iphoneAuth(url)
+        except:
+            Log.Exception('unable to auth : Auth mislukt, bevindt u zich in een KPN netwerk?')
+            return ObjectContainer(header=u"Error" , message=u"Auth mislukt, bevindt u zich in een KPN netwerk?")
+    
+    prams = {
+        'type' : 'LIVE',
+        'id' : IdLiveRegex.search(url).group("id"),
+        'action' : 'GetCDN',
+        'deviceType' : 'iPhone;6.1;2.3.6;K',
+        'channel' : 'IPAD'
+    }
+    hlsUrl = buildURL(SEC_API_URL(url) , prams)
+    data = XML.ElementFromURL(hlsUrl , cacheTime=0)
+    
+    Log.Info(HTML.StringFromElement(data))
+    
+    m3u8_url = data.find(".//channel[@src]").get('src')
+    return HTTPLiveStreamPlayList(m3u8_url)
+    
+####################################################################################################
+
+def HTTPLiveStreamPlayList(m3u8_url):
+
+    try:
+        playlist = HTTP.Request(m3u8_url).content
+    except:
+        Log.Info(" Error downloading Masterplaylist")
+        # Kpn does this sometime,  no idea why but we do it to
+        return "#E"
+    
+    Log.Info(playlist)
+    
+    authToken = getPlexAuthToken()
+    newPlaylist = []
+    for line in playlist.splitlines():
+        if line.startswith('#'):
+            if BandwidthRegex.match(line):
+                bandwidth = BandwidthRegex.search(line).group('bandwidth')
+            newPlaylist.append(line)
+            continue
+        else:
+            if not line.startswith('http'):
+                line = m3u8_url.rsplit('/' , 1)[0] + '/' + line
+            newLine = 'http://%s:32400%s' % (Network.PublicAddress , Callback(HTTPLiveSteamChunkList , url = line , bandwidth=bandwidth , authToken=authToken, ext='m3u8') + ('&X-Plex-Token=%s' % authToken if authToken else ''))
+            newPlaylist.append(newLine)
+    
+    newPlaylist = '\n'.join(newPlaylist)+'\n'
+    Log.Info(newPlaylist)
+    
+    return DataObject(newPlaylist , 'application/vnd.apple.mpegurl')
+
+def HTTPLiveSteamChunkList(url , bandwidth , authToken):
+    
+    try:
+        playlist =  HTTP.Request(url, cacheTime=0).content
+    except:
+        Log.Info(" Error downloading playlist , bandwidth = %s" % bandwidth)
+        return
+
+    Log.Info(playlist)
+
+    newPlaylist = []
+    for line in playlist.splitlines():
+        if line.startswith('#'):
+            if DecryptKeyUrlRegex.match(line):
+                # proxy the decrypte key because the server is on a kpn network, the client isn't always
+                decrypteUrl = DecryptKeyUrlRegex.search(line).group("decrypte_url")
+                line = line.replace(decrypteUrl , Callback(HTTPLiveSteamPassword , url=decrypteUrl) + ('&X-Plex-Token=%s' % authToken if authToken else ''))
+            newPlaylist.append(line)
+            continue
+        else:
+            if not line.startswith('http'):
+                 newLine = url.rsplit('/' , 1)[0] + '/' + line
+            newPlaylist.append(newLine)
+
+    newPlaylist = '\n'.join(newPlaylist) + '\n'
+    Log.Info(newPlaylist)
+
+    return DataObject(newPlaylist , 'application/vnd.apple.mpegurl')
+
+def HTTPLiveSteamPassword(url):
+    # proxy the decrypte key because the server is on a kpn network, the client isn't always
+    return HTTP.Request(url , cacheTime=CACHE_1HOUR).content
+    
+#####################################################################
+
+import urllib2
+def getPlexAuthToken():
+    """ get the plextoken to use if the client isn't local, is there a better why to do this?? """
+    try:
+        authToken = XML.ElementFromString(urllib2.urlopen('http://localhost:32400/myplex/account').read()).get('authToken')
+    except:
+        authToken = None
+    return authToken
+
+def iphoneAuth(url):
+
+    HTTP.ClearCookies()
+    
+    prams = {
+        'deviceType' : 'iPhone;6.1;2.3.6;K',
+        'action' : 'IpAuthentication',
+        'channel' : 'IPAD'
+    }
+    url = buildURL(SEC_API_URL(url) , prams)
+    info = JSON.ObjectFromURL(url , cacheTime=0)
+        
+    if len(info["errorDescription"]):
+        raise Ex.MediaGeoblocked
+
+def needLoginIphone():
+    "this functions makes sure we only login if we absolutly have to"
+    # always return true becuase it isn't working as expected
+    return True
+    l = []
+    for c in HTTP.Cookies:
+        if c.name in ['ACE' , 'JSESSIONID' , 'avs_cookie'] and c.domain == 'iphone.itvonline.nl':
+            l.append(c.name)
+            if c.is_expired():
+                return True
+    for k in ['ACE' , 'JSESSIONID' , 'avs_cookie']:
+        if k not in l:
+            return True
+    return False
+
+from datetime import datetime
+import urllib
+def buildURL(base , args):
+    parms = {}
+    for k ,v in args.iteritems():
+        if isinstance(v , list):
+            parms[k] = ";".join(v)
+        elif isinstance(v , datetime):
+            parms[k] = "%0.0f" % Datetime.TimestampFromDatetime(v)
+        else:
+            parms[k] = v
+    #Log.Info("%s?%s" % (base , urllib.urlencode(parms)))
+    return "%s?%s" % (base , urllib.urlencode(parms))
+
+#####################################################################

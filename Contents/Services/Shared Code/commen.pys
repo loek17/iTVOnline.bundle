@@ -1,0 +1,131 @@
+#####################################################################
+#
+# File:        commen.pys
+# Author:   Loek Wensveen
+# Date:      03/01/2014
+# Version: 1.0.0
+# About:        This plugin alows jou to watch itvonline in plex form kpn
+#
+#####################################################################
+
+# no imports
+
+#####################################################################
+
+DOMEIN_DICT = {
+    'KPN' : 'www',
+    'Telfort' : 'telfort'
+}
+
+#####################################################################
+
+def auth(Prefs):
+    def auth_deco(f):
+        def real_auth(*args , **kwargs):
+            time = Datetime.TimestampFromDatetime(Datetime.Now())
+            if not NeedLogin(time):
+                return f(*args , **kwargs)
+            
+            SUB_DOMEIN = lambda : DOMEIN_DICT[Prefs['provider']]
+            BASE_URL = lambda : "http://%s.itvonline.nl" % SUB_DOMEIN()
+            API_URL = lambda : BASE_URL() + "/AVS/besc"
+
+            from cookielib import Cookie
+            def add_cookie(key , value , max_age=False):
+                cookie = Cookie(0, key, value, None, False, "%s.itvonline.nl" % SUB_DOMEIN() , False, None,
+                 "/" , False , False, time+max_age , False , None, None, None)
+                HTTP.Cookies.set_cookie(cookie)
+            
+            def GetProfile():
+                prams = {
+                    'action' : 'GetProfile',
+                    'channel' : 'PCTV',
+                    '_' : time
+                }
+                url = buildURL(API_URL() , prams)
+                userData = JSON.ObjectFromURL(url)
+                Log.Info(userData)
+
+                if len(userData["errorDescription"]):
+                    Log.Exception(userData)
+                    raise Ex.APIException(userData["errorDescription"])
+
+                userData['resultObj']['pcVerified'] = 'no'
+                if len(userData['resultObj']['packageList']) < 20:
+                    add_cookie('UserInfoCookie' , JSON.StringFromObject(userData['resultObj']) , 30*60)
+                else:
+                    import math
+                    packs = userData['resultObj']['packageList']
+                    userData['resultObj']['packageList'] = packs[0:20]
+                    add_cookie('UserInfoCookie' , JSON.StringFromObject(userData['resultObj']) , 30*60)
+        
+                    count = 20
+                    lengte = int(math.ceil(len(userData['resultObj']['packageList'])))
+                    for i in range(1 , lengte):
+                        add_cookie('UserInfoCookie%d' % i , JSON.StringFromObject(packs[1+count*i:20+count*i]) , 30*60)
+            
+            prams = {
+                'action' : 'IpAuthentication',
+                'channel' : 'PCTV'
+            }
+            url = buildURL(API_URL() , prams)
+            data = JSON.ObjectFromURL(url , cacheTime=0)
+            
+            if len(data["errorDescription"]):
+                Log.Exception(data)
+                if data['errorDescription'] == "ACN_3055":
+                    raise Ex.APIException("Login Error : Je bent niet binnen een netwerk van KPN.")
+                else:
+                    raise Ex.APIException("Login Error : %s" % data['message'])
+
+            add_cookie('kpn_tan' , data["resultObj"]["tan"] , 30*60)
+            add_cookie('isAlive' , 'true' , 30*60)
+            GetProfile()
+
+            return f(*args , **kwargs)
+        return real_auth
+    return auth_deco
+    
+
+#####################################################################
+
+COOKIE_REGEX = Regex("UserInfoCookie\d+")
+def NeedLogin(time):
+    "this functions makes sure we only login if we absolutely have to"
+    l = []
+    for c in HTTP.Cookies:
+        if c.name in ['kpn_tan' , 'isAlive' , 'UserInfoCookie']:
+            l.append(c.name)
+            if c.is_expired():
+                return True
+            else:
+                # update the cookie if it is still oke
+                c.expires = time+30*60
+        if COOKIE_REGEX.match(c.name):
+            if c.is_expired():
+                return True
+            else:
+                # update the cookie if it is still oke
+                c.expires = time+30*60
+    for k in ['kpn_tan' , 'isAlive' , 'UserInfoCookie']:
+        if k not in l:
+            return True
+    return False
+
+#####################################################################
+
+from datetime import datetime
+import urllib
+def buildURL(base , args):
+    parms = {}
+    for k ,v in args.iteritems():
+        if isinstance(v , list):
+            parms[k] = ";".join(v)
+        elif isinstance(v , datetime):
+            parms[k] = "%0.0f" % Datetime.TimestampFromDatetime(v)
+        else:
+            parms[k] = v
+    #Log.Info("%s?%s" % (base , urllib.urlencode(parms)))
+    return "%s?%s" % (base , urllib.urlencode(parms))
+
+#####################################################################

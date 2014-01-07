@@ -1,0 +1,16 @@
+[
+    {
+        "id" : "provider",
+        "label" : "Uw iTVonline provider",
+        "type" : "enum",
+        "values" : ["KPN", "Telfort"],
+        "default" : "KPN"
+    },
+    {
+        "id": "Erotiek",
+        "type": "bool",
+        "label": "Verberg Erotiek",
+        "default": "true" 
+    }
+    
+]
