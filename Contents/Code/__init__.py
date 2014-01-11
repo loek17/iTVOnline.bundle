@@ -787,3 +787,7 @@ def buildURL(base , args):
 @route(VIDEO_PREFIX + '/dummy')
 def dummy():
     pass
+
+@route(VIDEO_PREFIX + '/imageHelper' , id=str)
+def imageHelper(id):
+    return DataObject(Resource.Load(CHANNEL_LIST[id][u'thumb']) , 'image/png')
