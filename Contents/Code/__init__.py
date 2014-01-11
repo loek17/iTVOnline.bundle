@@ -78,10 +78,11 @@ CHANNEL_LIST = {
 }
 
 RECORD_TYPE = {
-    u"FINISHED" : u"Opgenomen",
-    u"SCHEDULED" : u"Gepland",
-    u"ONGOING" : u"Wordt opgenomen",
-    u"FAILED" : u"Mislukt"
+    u"FINISHED" : {u"name" : u"Opgenomen" , u"popupTitle" : u"Opgemomen opnames" , u"thumb" : u""},
+    u"SCHEDULED" : {u"name" : u"Gepland" , u"popupTitle" : u"Geplande opnames" , u"thumb" : u""},
+    u"ONGOING" : {u"name" : u"Opname loopt" , u"popupTitle" : u"Lopende opnames" , u"thumb" : u""},
+    u"FAILED" : {u"name" : u"Mislukt" , u"popupTitle" : u"Mislukte opnames" , u"thumb" : u""},
+    u"ALL" : {u"popupTitle" : u"Alle opnames"}
 }
 
 MISS_EXT = u"poster-hl.jpg"
@@ -117,6 +118,7 @@ def Start():
     
     HTTP.Headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1650.63 Safari/537.36'
     HTTP.CacheTime = CACHE_1DAY
+    HTTP.ClearCookies()
 
 @auth(Prefs)
 def authDummy():
@@ -161,7 +163,7 @@ def MainMenu():
                 summary = u"Bekijk trailers van de films momenteel verkrijgbaar in de iTVonline Videotheek.",
                 thumb = R(ICON_VIDEOTHEEK)
             ),
-            DirectoryObject(
+            PopupDirectoryObject(
                 key = Callback(MijnOpnames),
                 title = u"Mijn Opnames",
                 summary = u"Beheer en verwijder uw opnames met Plex.",
@@ -294,7 +296,7 @@ def ProgramOptions(id):
         u'contentId' : id
     }
     url = buildURL(API_URL() , prams)
-    epg = JSON.ObjectFromURL(url , cacheTime=CACHE_1MINUTE*15)
+    epg = JSON.ObjectFromURL(url , cacheTime=CACHE_1MINUTE*5)
     Log.Info(epg)
     program = epg[u'resultObj']
     if program[u'starttime'] < time and program[u'endtime'] > time:
@@ -636,28 +638,41 @@ def buildVideoList(catList):
 
 @route(VIDEO_PREFIX + '/opnames')
 def MijnOpnames():
+    oc = ObjectContainer(title2 = u"Mijn Opnamens")
+    
+    for type in (u"ALL" , u"FINISHED" , u"ONGOING" , u"FAILED"):
+        oc.add(
+            DirectoryObject(
+                key = Callback(RecordType , type=type) ,
+                title = RECORD_TYPE[type][ u"popupTitle"],
+            )
+        )
+    return oc
+    
+def RecordType(type=u"ALL"):
     try:
-        records = GetRecodings()
+        records = GetRecodings(type)
     except Ex.APIException as e:
         Log.Exception(unicode(e))
         return ObjectContainer(header=u"Record Error" , message=unicode(e))
     
     Log.Info(records)
     
-    oc = ObjectContainer(title2 = u"Mijn Opnamens")
+    oc = ObjectContainer(title2 = u"Mijn Opnamens" , no_cache=True)
     for record in reversed(records[u'listOfRecordings']):
-        status = RECORD_TYPE[record[u'recordingStatus']] + (u"\n%s" % record[u'infoMessage'] if record[u'recordingStatus'] == u'FAILED' else u'')
+        status = RECORD_TYPE[record[u'recordingStatus']][u'name'] + (u"\n%s" % record[u'infoMessage'] if record[u'recordingStatus'] == u'FAILED' else u'')
         oc.add(
             PopupDirectoryObject(
                 key = Callback(RecordOptions , id=record[u'recordID'] , userStartTimeMarker=record[u'userStartTimeMarker']) ,
                 title = record[u'programTitle'],
-                summary = u'%s\n\n%s' % (status , record[u'programDescription'])
+                summary = u'%s\n\n%s' % (status , record[u'programDescription']),
+                thumb = RECORD_TYPE[record[u'recordingStatus']][u'thumb']
             )
         )
     return oc
 
 @route(VIDEO_PREFIX + '/opnames/options' , id=str)
-def RecordOptions(id):
+def RecordOptions(id , userStartTimeMarker):
     oc = ObjectContainer(
         title2 = u"Mijn Opnamens",
         objects = [
@@ -687,12 +702,12 @@ def DeleteRecord(id , userStartTimeMarker):
 #####################################################################
 
 @auth(Prefs)
-def GetRecodings():
+def GetRecodings(type=u"ALL"):
     prams = {
         u'action' : u'GetRecordingList',
         u'channel' : u'PCTV',
         u'typeOfRecording' : u'individual',
-        u'stateOfRecording': u'ALL'
+        u'stateOfRecording': type
     }
     url = buildURL(API_URL() , prams)
     epg = JSON.ObjectFromURL(url , cacheTime=0)
