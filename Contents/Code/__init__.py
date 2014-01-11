@@ -48,33 +48,33 @@ CHANNEL_LIST = {
     '23': {u'name' : u'SBS 6' , u'thumb' : u'SBS 6.png', u'art' : u'sbs6_art.jpg'},
     '24': {u'name' : u'RTL 7' , u'thumb' : u'RTL 7.png', u'art' : u''},
     '25': {u'name' : u'Net 5' , u'thumb' : u'Net 5.png', u'art' : u''},
-    '26': {u'name' : u'Veronica / Disney XD',  u'thumb' : u'Veronica DisneyXD.png', u'thumb2' : 'Veronica.png', u'art' : ''},
+    '26': {u'name' : u'Veronica / Disney XD',  u'thumb' : u'Veronica-Disney XD.png', u'thumb2' : 'Veronica.png', u'art' : ''},
     '27': {u'name' : u'RTL 8' , u'thumb' : u'RTL 8.png', u'art' : u''},
-    '100': {u'name' : u'Nick Jr.' , u'thumb' : u'Nick Jr.png', u'art' : u''},
+    '100': {u'name' : u'Nick Jr.' , u'thumb' : u'Nick J.png', u'art' : u''},
     '30': {u'name' : u'Comedy Central / Kindernet' , u'thumb' : u'Comedy Central.png', u'art' : u''},
-    '31': {u'name' : u'Nickelodeon' , u'thumb' : u'', u'art' : u''}, # need thumb
-    '29': {u'name' : u'MTV' , u'thumb' : u'MTV NL.png', u'art' : u''},
-    '205': {u'name' : u'Fox' , u'thumb' : u'', u'art' : u''}, # need thumb
+    '31': {u'name' : u'Nickelodeon' , u'thumb' : u'Nickelodeon.png', u'art' : u''}, # need thumb
+    '29': {u'name' : u'MTV' , u'thumb' : u'MTV.png', u'art' : u''},
+    '205': {u'name' : u'Fox' , u'thumb' : u'FOX.png', u'art' : u''}, # need thumb
     '32': {u'name' : u'Discovery Channel' , u'thumb' : u'Discovery Channel.png', u'art' : u''},
     '33': {u'name' : u'National Geographic' , u'thumb' : u'National Geographic Channel.png', u'art' : u''},
-    '34': {u'name' : u'TLC' , u'thumb' : u'', u'art' : u''}, # Need thumb
-    '175': {u'name' : u'24Kitchen' , u'thumb' : u'24 Kitchen.png', u'art' : u''},
+    '34': {u'name' : u'TLC' , u'thumb' : u'TLC.png', u'art' : u''}, # Need thumb
+    '175': {u'name' : u'24Kitchen' , u'thumb' : u'24KITCHEN.png', u'art' : u''},
     '39': {u'name' : u'BBC1', u'thumb' : u'BBC 1.png', u'art' : u''},
     '40': {u'name' : u'BBC2', u'thumb' : u'BBC 2.png', u'art' : u''},
     #'98': {u'name' : u'BBC3', u'thumb' : u'BBC 3.png', u'art' : u''},
     #'99': {u'name' : u'BBC4', u'thumb' : u'BBC 4.png', u'art' : u''},
-    '37': {u'name' : u'ÈÈn', u'thumb' : u'EeÅn.png', u'art' : u''},
-    '38': {u'name' : u'Canvas' , u'thumb' : u'', u'art' : u''},# Need thumb
-    '176': {u'name' : u'Ketnet' , u'thumb' : u'', u'art' : u''},# Need thumb
+    '37': {u'name' : u'ÈÈn', u'thumb' : u'een.png', u'art' : u''},
+    '38': {u'name' : u'Canvas' , u'thumb' : u'CANVAS.png', u'art' : u''},# Need thumb
+    '176': {u'name' : u'Ketnet' , u'thumb' : u'Ketnet.png', u'art' : u''},# Need thumb
     '41': {u'name' : u'Eurosport' , u'thumb' : u'Eurosport.png', u'art' : u''},
     '42': {u'name' : u'Humor TV 24' , u'thumb' : u'Humor TV 24.png', u'art' : u''},
-    '43': {u'name' : u'NOS Journaal 24' , u'thumb' : u'', u'art' : u''},# Need thumb
+    '43': {u'name' : u'NOS Journaal 24' , u'thumb' : u'NOS Journaal 24.png', u'art' : u''},# Need thumb
     '44': {u'name' : u'13th Street' , u'thumb' : u'13th Street.png', u'art' : u''},
-    '45': {u'name' : u'CNN' , u'thumb' : u'', u'art' : u''},# Need thumb
+    '45': {u'name' : u'CNN' , u'thumb' : u'CNN.png', u'art' : u''},# Need thumb
     '47': {u'name' : u'BBC World News' , u'thumb' : u'BBC World News.png', u'art' : u''},
-    '190': {u'name' : u'xite' , u'thumb' : '', 'art' : ''},# Need thumb
+    '190': {u'name' : u'xite' , u'thumb' : 'Xite.png', 'art' : ''},# Need thumb
     '59': {u'name' : u'TV5 Monde' , u'thumb' : '', 'art' : ''},# Need thumb
-    '28': {u'name' : u'Alles Over Videoland' , u'thumb' : u'', u'art' : u''}
+    '28': {u'name' : u'Alles Over Videoland' , u'thumb' : u'videotheek tv.png', u'art' : u''}
 }
 
 RECORD_TYPE = {
