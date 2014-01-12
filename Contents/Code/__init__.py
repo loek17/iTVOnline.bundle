@@ -25,6 +25,8 @@ ICON_OPNAMES = u'Record.png'
 SUB_DOMEIN = lambda : DOMEIN_DICT[Prefs['provider']]
 BASE_URL = lambda : u"http://%s.itvonline.nl" % SUB_DOMEIN()
 API_URL = lambda : BASE_URL() + u"/AVS/besc"
+SEC_BASE_URL = lambda : u"https://%s.itvonline.nl" % SUB_DOMEIN()
+SEC_API_URL = lambda : SEC_BASE_URL() + u"/AVS/besc"
 
 PLAY_MISS_URL = lambda : BASE_URL() + u"/videotheek/spelen/%s"
 PLAY_VIDEOTHEEK_URL = lambda : BASE_URL() + u"/videotheek/spelen/%s"
@@ -581,26 +583,23 @@ def VideoTheekPopulair():
 @route(VIDEO_PREFIX + '/videotheek/display' , video=dict , allow_sync=True)
 def DisplayVideo(video):
     oc = ObjectContainer(title2 = u"Videotheek")
-    trailer = URLService.MetadataObjectForURL(PLAY_VIDEOTHEEK_URL() % video[u'contentId'])
-    trailer.title = u"Trailer"
-    oc.add(trailer)
-    if HaveContentRight(True):
-        #add play movie code here
-        pass
+    video = URLService.MetadataObjectForURL(PLAY_VIDEOTHEEK_URL() % video[u'contentId'])
+
+    if CheckContentRights(video[u'contentId']):
+        oc.add(video)
     else:
-        prijs = prijsRegex.findall(trailer.summary)[0]
+        video.title = u"Trailer"
+        oc.add(video)
+        prijs = prijsRegex.findall(video.summary)[0]
         Log.Info(prijs)
         oc.add(
             PopupDirectoryObject(
                 key = Callback(AskBuy , video=video , price=prijs),
                 title = u"Film Huren",
-                summary = trailer.summary
+                summary = video.summary
             )
         )
     return oc
-
-def HaveContentRight(url):
-    return False
 
 def AskBuy(video , price):
     oc = ObjectContainer(
@@ -765,8 +764,47 @@ def GetRentMovies():
     return epg[u'resultObj']
 
 @auth(Prefs)
-def BuyRentMovie():
-    pass
+def BuyRentMovie(id , pin):
+    prams = {
+        u'action' : u'ContentPurchase',
+        u'channel' : u'PCTV'
+        u'contentId': id,
+        u'rememberPin' : u'N',
+        u'PURCHASE_CC' : u'N',
+        u'securityPIN' : pin,
+        u'_' : Datetime.Now()
+    }
+    url = buildURL(SEC_API_URL() , prams)
+    epg = JSON.ObjectFromURL(url , cacheTime=0)
+    
+    Log.Info(epg)
+    
+    if len(epg[u'errorDescription']):
+        Log.Critical(epg)
+        raise Ex.APIException(epg[u'message'])
+    return True
+
+@auth(Prefs)
+def CheckContentRights(id):
+    prams = {
+        u'action' : u'CheckContentRights',
+        u'channel' : u'PCTV'
+        u'contentId': id,
+        u'type' : u'VOD',
+        u'_' : Datetime.Now()
+    }
+    url = buildURL(SEC_API_URL() , prams)
+    epg = JSON.ObjectFromURL(url , cacheTime=0)
+    
+    Log.Info(epg)
+    
+    if epg[u'resultCode'] == u'OK':
+        return True
+    elif epg[u'resultCode'] == u'KO_BUY':
+        return False
+    else:
+        Log.Critical(epg)
+        raise Ex.APIException(epg[u'message'])
 
 #####################################################################
 
