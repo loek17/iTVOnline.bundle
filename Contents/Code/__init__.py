@@ -523,7 +523,7 @@ def MyVideoTheek():
 
 @route(VIDEO_PREFIX + '/videotheek/categorie' , catList=list)
 def VideoTheekCategorie(catList=[]):
-    exculde = [730 , 23 , 1100 , 541 if not Prefs['Erotiek'] else 99999]
+    exculde = [730 , 23 , 1100 , 541 if Prefs['Erotiek'] else 99999999]
     oc = ObjectContainer(title2 = u"Videotheek",)
     if not len(catList):
         prams = {
