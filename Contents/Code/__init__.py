@@ -9,6 +9,7 @@
 #####################################################################
 
 auth = SharedCodeService.commen.auth
+LoginException = SharedCodeService.commen.LoginException
 
 #####################################################################
 
@@ -16,7 +17,11 @@ VIDEO_PREFIX = "/video/itvonline"
 NAME = "iTVOnline"
 
 ART = u'art-default.jpg'
-ICON = u'icon-default.jpg'
+ICONS = {
+    u'KPN' : u'KPN icon-default.png',
+    u'Telfort' : u'Telford icon-default.png'
+}
+ICON_TV = u'icon-default.jpg'
 ICON_GIDS = u'Recent.png'
 ICON_MISS = u'History.png'
 ICON_VIDEOTHEEK = u'TV.png'
@@ -42,41 +47,38 @@ DOMEIN_DICT = {
 #'18;19;20;21;22;23;24;25;26;27;30;31;29;28;32;33;34;175;39;40;37;38;176;41;42;43;44;45;47;54;58'
 CHANNELS_ORDERD = [ '18','19','20','21','22','23','24','25','26','27','30','31','29','205','32','33','34','28','175','39','40','37','38','176','41','42','43','44','45','47','190','100','28']
 CHANNEL_LIST = {
-    '18': {u'name' : u'Nederland 1' , u'thumb' : u'nederland1.png', u'art' : u'Nederland_Art.jpg'},
-    '19': {u'name' : u'Nederland 2' , u'thumb' : u'nederland2.png', u'art' : u'Nederland_Art.jpg'},
-    '20': {u'name' : u'Nederland 3' , u'thumb' : u'nederland3.png', u'art' : u'Nederland_Art.jpg'},
-    '21': {u'name' : u'RTL 4' , u'thumb' : u'rtl4_nl.png', u'art' : u'rtl4_art.png'},
-    '22': {u'name' : u'RTL 5' , u'thumb' : u'rtl5.png', u'art' : u''},
-    '23': {u'name' : u'SBS 6' , u'thumb' : u'sbs6.png', u'art' : u'sbs6_art.jpg'},
-    '24': {u'name' : u'RTL 7' , u'thumb' : u'rtl7.png', u'art' : u''},
-    '25': {u'name' : u'Net 5' , u'thumb' : u'net5.png', u'art' : u''},
-    '26': {u'name' : u'Veronica / Disney XD',  u'thumb' : u'disney_xd_nl.png', u'thumb2' : 'veronica.png', u'art' : ''},
-    '27': {u'name' : u'RTL 8' , u'thumb' : u'rtl8.png', u'art' : u''},
-    '100': {u'name' : u'Nick Jr.' , u'thumb' : u'nick_jr.png', u'art' : u''},
-    '30': {u'name' : u'Comedy Central / Kindernet' , u'thumb' : u'comedy_central_nl.png', u'art' : u''},
-    '31': {u'name' : u'Nickelodeon' , u'thumb' : u'nickelodeon_nl.png', u'art' : u''}, # need thumb
-    '29': {u'name' : u'MTV' , u'thumb' : u'mtv_nl.png', u'art' : u''},
-    '205': {u'name' : u'Fox' , u'thumb' : u'Fox.png', u'art' : u''}, # need thumb
-    '32': {u'name' : u'Discovery Channel' , u'thumb' : u'discovery.png', u'art' : u''},
-    '33': {u'name' : u'National Geographic' , u'thumb' : u'nat_geo.png', u'art' : u''},
-    '34': {u'name' : u'TLC' , u'thumb' : u'tlc.png', u'art' : u''}, # Need thumb
-    '175': {u'name' : u'24Kitchen' , u'thumb' : u'24_kitchen.png', u'art' : u''},
-    '39': {u'name' : u'BBC1', u'thumb' : u'bbc_one.png', u'art' : u''},
-    '40': {u'name' : u'BBC2', u'thumb' : u'bbc_two.png', u'art' : u''},
-    #'98': {u'name' : u'BBC3', u'thumb' : u'BBC 3.png', u'art' : u''},
-    #'99': {u'name' : u'BBC4', u'thumb' : u'BBC 4.png', u'art' : u''},
-    '37': {u'name' : u'één', u'thumb' : u'vrt_een.png', u'art' : u''},
-    '38': {u'name' : u'Canvas' , u'thumb' : u'vrt_canvas.png', u'art' : u''},# Need thumb
-    '176': {u'name' : u'Ketnet' , u'thumb' : u'vrt_ketnet.png', u'art' : u''},# Need thumb
-    '41': {u'name' : u'Eurosport' , u'thumb' : u'eurosport.png', u'art' : u''},
-    '42': {u'name' : u'Humor TV 24' , u'thumb' : u'npo_humor_tv_24.png', u'art' : u''},
-    '43': {u'name' : u'NOS Journaal 24' , u'thumb' : u'npo_journaal_24.png', u'art' : u''},# Need thumb
-    '44': {u'name' : u'13th Street' , u'thumb' : u'13th_street_nl.png', u'art' : u''},
-    '45': {u'name' : u'CNN' , u'thumb' : u'cnn.png', u'art' : u''},# Need thumb
-    '47': {u'name' : u'BBC World News' , u'thumb' : u'bbc_world_news.png', u'art' : u''},
-    '190': {u'name' : u'xite' , u'thumb' : 'xite.png', 'art' : ''},# Need thumb
-    #'59': {u'name' : u'TV5 Monde' , u'thumb' : u'tv5_monde.png', u'art' : u''},# Need thumb
-    '28': {u'name' : u'Alles Over Videoland' , u'thumb' : u'videoland_1.png', u'art' : u''}
+    '18': {u'name' : u'Nederland 1' , u'thumb' : u'Nederland 1.png', u'art' : u'Nederland_Art.jpg'},
+    '19': {u'name' : u'Nederland 2' , u'thumb' : u'Nederland 2.png', u'art' : u'Nederland_Art.jpg'},
+    '20': {u'name' : u'Nederland 3' , u'thumb' : u'Nederland 3.png', u'art' : u'Nederland_Art.jpg'},
+    '21': {u'name' : u'RTL 4' , u'thumb' : u'RTL 4.png', u'art' : u'rtl4_art.png'},
+    '22': {u'name' : u'RTL 5' , u'thumb' : u'RTL 5.png', u'art' : u''},
+    '23': {u'name' : u'SBS 6' , u'thumb' : u'SBS 6.png', u'art' : u'sbs6_art.jpg'},
+    '24': {u'name' : u'RTL 7' , u'thumb' : u'RTL 7.png', u'art' : u''},
+    '25': {u'name' : u'Net 5' , u'thumb' : u'Net 5.png', u'art' : u''},
+    '26': {u'name' : u'Veronica / Disney XD',  u'thumb' : u'Veronica Disney.png', u'art' : ''},
+    '27': {u'name' : u'RTL 8' , u'thumb' : u'RTL 8.png', u'art' : u''},
+    '100': {u'name' : u'Nick Jr.' , u'thumb' : u'Nick Jr.png', u'art' : u''},
+    '30': {u'name' : u'Comedy Central / Kindernet' , u'thumb' : u'Comedy Central.png', u'art' : u''},
+    '31': {u'name' : u'Nickelodeon' , u'thumb' : u'Nickelodeon.png', u'art' : u''}, # need thumb
+    '29': {u'name' : u'MTV' , u'thumb' : u'MTV NL.png', u'art' : u''},
+    '205': {u'name' : u'Fox' , u'thumb' : u'FOX.png', u'art' : u''}, # need thumb
+    '32': {u'name' : u'Discovery Channel' , u'thumb' : u'Discovery Channel.png', u'art' : u''},
+    '33': {u'name' : u'National Geographic' , u'thumb' : u'national geographic.png', u'art' : u''},
+    '34': {u'name' : u'TLC' , u'thumb' : u'TLC.png', u'art' : u''}, # Need thumb
+    '175': {u'name' : u'24Kitchen' , u'thumb' : u'24 kitchen.png', u'art' : u''},
+    '39': {u'name' : u'BBC1', u'thumb' : u'BBC One.png', u'art' : u''},
+    '40': {u'name' : u'BBC2', u'thumb' : u'BBC Two.png', u'art' : u''},
+    '37': {u'name' : u'één', u'thumb' : u'een.png', u'art' : u''},
+    '38': {u'name' : u'Canvas' , u'thumb' : u'CANVAS.png', u'art' : u''},# Need thumb
+    '176': {u'name' : u'Ketnet' , u'thumb' : u'Ketnet.png', u'art' : u''},# Need thumb
+    '41': {u'name' : u'Eurosport' , u'thumb' : u'Eurosport.png', u'art' : u''},
+    '42': {u'name' : u'Humor TV 24' , u'thumb' : u'humor TV 24.png', u'art' : u''},
+    '43': {u'name' : u'NOS Journaal 24' , u'thumb' : u'journaal TV 24.png', u'art' : u''},# Need thumb
+    '44': {u'name' : u'13th Street' , u'thumb' : u'13th Street.png', u'art' : u''},
+    '45': {u'name' : u'CNN' , u'thumb' : u'CNN.png', u'art' : u''},# Need thumb
+    '47': {u'name' : u'BBC World News' , u'thumb' : u'BBC World.png', u'art' : u''},
+    '190': {u'name' : u'xite' , u'thumb' : 'Xite.png', 'art' : ''},# Need thumb
+    '28': {u'name' : u'Alles Over Videoland' , u'thumb' : u'Alles over videoland.png', u'art' : u''}
 }
 
 RECORD_TYPE = {
@@ -122,22 +124,22 @@ def Start():
     HTTP.CacheTime = CACHE_1DAY
     HTTP.ClearCookies()
 
-@auth(Prefs)
+@auth(Prefs , Force=True)
 def authDummy():
     pass
 
 def ValidatePrefs():
-    u"The auth decoretor will return an raise an APIException with header and message set to the right error if there is an error"
+    u"The auth decoretor will return an raise an LoginException with header and message set to the right error if there is an error"
     try:
         authDummy()
-    except Ex.APIException as e:
+    except LoginException as e:
         Log.Exception(unicode(e))
         return ObjectContainer(header=u"Auth Error" , message=unicode(e))
     return
 
 #####################################################################
 
-@handler(VIDEO_PREFIX, NAME, ICON, ART)
+@handler(VIDEO_PREFIX, NAME, ICONS[Prefs['provider']] , ART)
 def MainMenu():
     oc = ObjectContainer(
         objects = [
@@ -145,7 +147,7 @@ def MainMenu():
                 key = Callback(Channels),
                 title = u"Live TV Kanalen",
                 summary = u"Bekijk uw live TV rechtstreek vanuit Plex.",
-                thumb = R(ICON)
+                thumb = R(ICON_TV)
             ),
 			DirectoryObject(
                 key = Callback(Gids),
@@ -326,7 +328,7 @@ def ProgramOptions(id):
 def RecordProgram(externalChannelId , programRefNr , programStartTime):
     try:
         epg = SetRecodings(externalChannelId , programRefNr , programStartTime)
-    except Ex.APIException as e:
+    except LoginException as e:
         Log.Exception(unicode(e))
         return ObjectContainer(header=u"Record Error" , message=unicode(e))
 
@@ -510,7 +512,7 @@ def VideoTheek():
 def MyVideoTheek():
     try:
         movie = GetRentMovies()
-    except Ex.APIException as e:
+    except LoginException as e:
         Log.Exception(unicode(e))
         return ObjectContainer(header=u"Videotheek Error" , message=unicode(e))
     if movie:
@@ -651,7 +653,7 @@ def MijnOpnames():
 def RecordType(type=u"ALL"):
     try:
         records = GetRecodings(type)
-    except Ex.APIException as e:
+    except LoginException as e:
         Log.Exception(unicode(e))
         return ObjectContainer(header=u"Record Error" , message=unicode(e))
     
@@ -692,7 +694,7 @@ def RecordOptions(id , userStartTimeMarker):
 def DeleteRecord(id , userStartTimeMarker):
     try:
         epg = DelRecodings(id , userStartTimeMarker)
-    except Ex.APIException as e:
+    except LoginException as e:
         Log.Exception(unicode(e))
         return ObjectContainer(header=u"Delete Record Error" , message=unicode(e))
 
@@ -712,7 +714,7 @@ def GetRecodings(type=u"ALL"):
     epg = JSON.ObjectFromURL(url , cacheTime=0)
     Log.Info(epg)
     if len(epg[u'errorDescription']):
-        raise Ex.APIException(epg[u'message'])
+        raise LoginException(epg[u'message'])
     return epg[u'resultObj']
 
 # programStartTime is een unix time *1000
@@ -730,7 +732,7 @@ def SetRecodings(externalChannelId , programRefNr , programStartTime):
     epg = JSON.ObjectFromURL(url , cacheTime=0)
     Log.Info(epg)
     if len(epg[u'errorDescription']):
-        raise Ex.APIException(epg[u'message'])
+        raise LoginException(epg[u'message'])
     return epg
 
 @auth(Prefs)
@@ -746,7 +748,7 @@ def DelRecodings(id , userStartTimeMarker):
     epg = JSON.ObjectFromURL(url , cacheTime=0)
     Log.Info(epg)
     if len(epg[u'errorDescription']):
-        raise Ex.APIException(epg[u'message'])
+        raise LoginException(epg[u'message'])
     return epg[u'resultObj']
 
 @auth(Prefs)
@@ -760,14 +762,14 @@ def GetRentMovies():
     Log.Info(epg)
     if len(epg[u'errorDescription']):
         Log.Critical(epg)
-        raise Ex.APIException(epg[u'message'])
+        raise LoginException(epg[u'message'])
     return epg[u'resultObj']
 
 @auth(Prefs)
 def BuyRentMovie(id , pin):
     prams = {
         u'action' : u'ContentPurchase',
-        u'channel' : u'PCTV'
+        u'channel' : u'PCTV',
         u'contentId': id,
         u'rememberPin' : u'N',
         u'PURCHASE_CC' : u'N',
@@ -781,14 +783,14 @@ def BuyRentMovie(id , pin):
     
     if len(epg[u'errorDescription']):
         Log.Critical(epg)
-        raise Ex.APIException(epg[u'message'])
+        raise LoginException(epg[u'message'])
     return True
 
 @auth(Prefs)
 def CheckContentRights(id):
     prams = {
         u'action' : u'CheckContentRights',
-        u'channel' : u'PCTV'
+        u'channel' : u'PCTV',
         u'contentId': id,
         u'type' : u'VOD',
         u'_' : Datetime.Now()
@@ -804,7 +806,7 @@ def CheckContentRights(id):
         return False
     else:
         Log.Critical(epg)
-        raise Ex.APIException(epg[u'message'])
+        raise LoginException(epg[u'message'])
 
 #####################################################################
 

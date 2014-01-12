@@ -39,3 +39,12 @@ Windows 7  : C:\Users\<GEBRUIKER>\AppData\Local\Plex Media Server\Plug-ins
 vragen op opmerkingen zijn altijd welkom
  
 Groetjes Loek
+
+###################################################################################################################
+
+Credits:
+
+The Plex Team 
+henk141270 voor maken van de tv Logo's
+
+###################################################################################################################
