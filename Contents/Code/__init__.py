@@ -44,6 +44,13 @@ DOMEIN_DICT = {
     u'Telfort' : u'telfort'
 }
 
+# Plex media center ondersteund geen versleutelde http live streaming
+EXCULUDE_CLIENT_DICT = [
+    ClientPlatform.MacOSX,
+    ClientPlatform.Linux,
+    ClientPlatform.Windows
+]
+
 #'18;19;20;21;22;23;24;25;26;27;30;31;29;28;32;33;34;175;39;40;37;38;176;41;42;43;44;45;47;54;58'
 CHANNELS_ORDERD = [ '18','19','20','21','22','23','24','25','26','27','30','31','29','205','32','33','34','28','175','39','40','37','38','176','41','42','43','44','45','47','190','100','28']
 CHANNEL_LIST = {
@@ -141,6 +148,31 @@ def ValidatePrefs():
 
 @handler(VIDEO_PREFIX, NAME, ICONS[Prefs['provider']] , ART)
 def MainMenu():
+    if Client.Platform in EXCULUDE_CLIENT_DICT:
+        oc = ObjectContainer(
+            objects = [
+                DirectoryObject(
+                    key = Callback(dummy),
+                    title = u"Client niet volledig ondersteunt",
+                    summary = u"Deze client wordt niet volledig ondersteun door deze plugin.\n Probeer de laatste versie van Plex Home Theater te downloaden. Deze wordt wel volledig onsteund.",
+                    thumb = R(u"FlagRed.png")
+                ),
+                DirectoryObject(
+                    key = Callback(Gids),
+                    title = u"Gids",
+                    summary = u"Bekijk de gids en plan opnames.",
+                    thumb = R(ICON_GIDS)
+                ),
+                PopupDirectoryObject(
+                    key = Callback(MijnOpnames),
+                    title = u"Mijn Opnames",
+                    summary = u"Beheer en verwijder uw opnames met Plex.",
+                    thumb = R(ICON_OPNAMES)
+                ),
+                PrefsObject(title=u"Instellingen" , summary=u"Selecteer uw provider en andere opties.")
+            ]
+        )
+        return oc
     oc = ObjectContainer(
         objects = [
             DirectoryObject(
