@@ -8,7 +8,7 @@
 #
 #####################################################################
 
-# no imports
+from cookielib import Cookie
 
 #####################################################################
 
@@ -25,24 +25,37 @@ class LoginException(Exception):
 def auth(Prefs , Force=False):
     def auth_deco(f):
         def real_auth(*args , **kwargs):
-            time = Datetime.TimestampFromDatetime(Datetime.Now())
-            if not NeedLogin(time) and not Force:
-                return f(*args , **kwargs)
-            
+
             SUB_DOMEIN = lambda : DOMEIN_DICT[Prefs['provider']]
             BASE_URL = lambda : "http://%s.itvonline.nl" % SUB_DOMEIN()
             API_URL = lambda : BASE_URL() + "/AVS/besc"
+            
+            time = Datetime.TimestampFromDatetime(Datetime.Now())
+            
+            if not NeedLogin(time) and not Force:
+                prams = {
+                    'action' : 'KeepAlive',
+                    'channel' : 'PCTV'
+                }
+                url = buildURL(API_URL() , prams)
+                data = JSON.ObjectFromURL(url , cacheTime=0)
+                
+                Log.Info(data)
+                
+                if not len(data['errorDescription']):
+                    return f(*args , **kwargs)
 
-            from cookielib import Cookie
+            
             def add_cookie(key , value , max_age=False):
                 cookie = Cookie(0, key, value, None, False, "%s.itvonline.nl" % SUB_DOMEIN() , False, None,
                  "/" , False , False, time+max_age , False , None, None, None)
                 HTTP.Cookies.set_cookie(cookie)
             
-            def GetProfile():
+            def GetProfile(tan):
                 prams = {
                     'action' : 'GetProfile',
                     'channel' : 'PCTV',
+                    'crmAccountId' : tan,
                     '_' : time
                 }
                 url = buildURL(API_URL() , prams)
@@ -55,17 +68,22 @@ def auth(Prefs , Force=False):
 
                 userData['resultObj']['pcVerified'] = 'no'
                 if len(userData['resultObj']['packageList']) < 20:
+                    Log.Info("Less than 20 packages : %d" % len(userData['resultObj']['packageList']))
                     add_cookie('UserInfoCookie' , JSON.StringFromObject(userData['resultObj']) , 30*60)
                 else:
                     import math
+                    Log.Info("More than 20 packages : %d" % len(userData['resultObj']['packageList']))
                     packs = userData['resultObj']['packageList']
-                    userData['resultObj']['packageList'] = packs[0:20]
+                    userData['resultObj']['packageList'] = packs[0:19]
                     add_cookie('UserInfoCookie' , JSON.StringFromObject(userData['resultObj']) , 30*60)
         
                     count = 20
-                    lengte = int(math.ceil(len(userData['resultObj']['packageList'])))
+                    lengte = int(math.ceil(len(packs)/20)) + 1
+                    
+                    Log.Info(lengte)
+                    
                     for i in range(1 , lengte):
-                        add_cookie('UserInfoCookie%d' % i , JSON.StringFromObject(packs[1+count*i:20+count*i]) , 30*60)
+                        add_cookie('UserInfoCookie%d' % i , JSON.StringFromObject( packs[count*i : 19+count*i] ) , 30*60)
             
             HTTP.ClearCookies()
             
@@ -83,9 +101,9 @@ def auth(Prefs , Force=False):
                 else:
                     raise LoginException("Login Error : %s" % data['message'])
 
-            add_cookie('kpn_tan' , data["resultObj"]["tan"] , 30*60)
-            add_cookie('isAlive' , 'true' , 30*60)
-            GetProfile()
+            #add_cookie('kpn_tan' , data["resultObj"]["tan"] , 30*60)
+            #add_cookie('isAlive' , 'true' , 30*60)
+            #GetProfile(data['resultObj']['tan'])
 
             return f(*args , **kwargs)
         return real_auth
@@ -94,25 +112,16 @@ def auth(Prefs , Force=False):
 
 #####################################################################
 
-COOKIE_REGEX = Regex("UserInfoCookie\d+")
+DOMEIN_REGEX = Regex("\.itvonline\.nl$")
 def NeedLogin(time):
     "this functions makes sure we only login if we absolutely have to"
     l = []
     for c in HTTP.Cookies:
-        if c.name in ['kpn_tan' , 'isAlive' , 'UserInfoCookie']:
+        if c.name in ['ACE' , 'JSESSIONID' , 'avs_cookie'] and DOMEIN_REGEX.search(c.domain):
             l.append(c.name)
             if c.is_expired():
                 return True
-            else:
-                # update the cookie if it is still oke
-                c.expires = time+30*60
-        if COOKIE_REGEX.match(c.name):
-            if c.is_expired():
-                return True
-            else:
-                # update the cookie if it is still oke
-                c.expires = time+30*60
-    for k in ['kpn_tan' , 'isAlive' , 'UserInfoCookie']:
+    for k in ['ACE' , 'JSESSIONID' , 'avs_cookie']:
         if k not in l:
             return True
     return False

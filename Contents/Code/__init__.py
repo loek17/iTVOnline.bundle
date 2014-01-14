@@ -8,8 +8,8 @@
 #
 #####################################################################
 
-auth = SharedCodeService.commen.auth
-LoginException = SharedCodeService.commen.LoginException
+#auth = SharedCodeService.commen.auth
+#LoginException = SharedCodeService.commen.LoginException
 
 #####################################################################
 
@@ -38,6 +38,7 @@ PLAY_VIDEOTHEEK_URL = lambda : BASE_URL() + u"/videotheek/spelen/%s"
 PLAY_CHANNEL_URL = lambda : BASE_URL() + u"/?channelId=%s"
 
 prijsRegex = Regex("^prijs : (.*)$" , Regex.MULTILINE)
+domeinRegex = Regex("\.itvonline\.nl$")
 
 DOMEIN_DICT = {
     u'KPN' : u'www',
@@ -49,6 +50,13 @@ EXCULUDE_CLIENT_DICT = [
     ClientPlatform.MacOSX,
     ClientPlatform.Linux,
     ClientPlatform.Windows
+]
+
+PACKAGE_EXCULUDE = [
+    366,
+    548,
+    569,
+    548
 ]
 
 #'18;19;20;21;22;23;24;25;26;27;30;31;29;28;32;33;34;175;39;40;37;38;176;41;42;43;44;45;47;54;58'
@@ -112,7 +120,63 @@ ICON_URLS = [
     u"http://x8.itvonline.nl/kpn/kpnwebtv/%s",
     u"http://x9.itvonline.nl/kpn/kpnwebtv/%s",
 ]
- 
+
+#####################################################################
+
+class LoginException(Exception):
+    pass
+
+def auth(Force=False):
+    def auth_deco(f):
+        def real_auth(*args , **kwargs):
+            if not NeedLogin() and not Force:
+                prams = {
+                    'action' : 'KeepAlive',
+                    'channel' : 'PCTV'
+                }
+                url = buildURL(API_URL() , prams)
+                data = JSON.ObjectFromURL(url , cacheTime=0)
+                
+                Log.Info(data)
+                
+                if not len(data['errorDescription']):
+                    return f(*args , **kwargs)
+            
+            HTTP.ClearCookies()
+            
+            prams = {
+                'action' : 'IpAuthentication',
+                'channel' : 'PCTV'
+            }
+            url = buildURL(API_URL() , prams)
+            data = JSON.ObjectFromURL(url , cacheTime=0)
+            
+            if len(data["errorDescription"]):
+                Log.Exception(JSON.StringFromObject(data))
+                if data['errorDescription'] == "ACN_3055":
+                    raise LoginException("Login Error : Je bent niet binnen een netwerk van KPN of Telfort.")
+                else:
+                    raise LoginException("Login Error : %s" % data['message'])
+            
+            Dict[u'tan'] = data[u'resultObj'][u'tan']
+
+            return f(*args , **kwargs)
+        return real_auth
+    return auth_deco
+
+def NeedLogin():
+    "this functions makes sure we only login if we absolutely have to"
+    l = []
+    for c in HTTP.Cookies:
+        if c.name in ['ACE' , 'JSESSIONID' , 'avs_cookie'] and domeinRegex.search(c.domain):
+            l.append(c.name)
+            if c.is_expired():
+                return True
+    for k in ['ACE' , 'JSESSIONID' , 'avs_cookie']:
+        if k not in l:
+            return True
+    return False
+
 #####################################################################
 
 def Start():
@@ -130,8 +194,10 @@ def Start():
     HTTP.Headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1650.63 Safari/537.36'
     HTTP.CacheTime = CACHE_1DAY
     HTTP.ClearCookies()
+    
+    Log.Info("##########################  Plugins Started  #################################")
 
-@auth(Prefs , Force=True)
+@auth(Force=True)
 def authDummy():
     pass
 
@@ -173,6 +239,7 @@ def MainMenu():
             ]
         )
         return oc
+
     oc = ObjectContainer(
         objects = [
             DirectoryObject(
@@ -215,19 +282,40 @@ def MainMenu():
 @route(VIDEO_PREFIX + '/channels')
 def Channels():
     oc = ObjectContainer(title2 = u"Live TV")
+    prams = {
+        u'action' : u'GetLiveChannels',
+        u'channel': u'PCTV'
+    }
+    url = buildURL(API_URL() , prams)
+    channelData = JSON.ObjectFromURL(url)[u'resultObj']
+    packageIds = GetPackageIds()
+    channelIds = []
+    for channel in channelData['channelList']:
+        for package in channel[u'packageList']:
+            if package[u'packageId'] in packageIds and package[u'packageId'] not in PACKAGE_EXCULUDE:
+                channelIds.append(unicode(channel[u'channelId']))
+                break
 
     prams = {
         u'action' : u'GetEpg',
         u'channel':u'PCTV' , 
         u'startTimeStamp': Datetime.Now(), 
         u'maxResultsPerChannel': 2 , 
-        u'channelId': CHANNELS_ORDERD
+        u'channelId': channelIds
     }
     url = buildURL(API_URL() , prams)
     epg = JSON.ObjectFromURL(url , cacheTime=CACHE_1MINUTE*5)
     Log.Info(epg)
     channels = epg[u'resultObj'][u'channelList']
-    for channel in sorted(channels , key=lambda channel : CHANNELS_ORDERD.index(channel[u'channelId'])):
+    for channel in sorted(channels , key=lambda channel : channelIds.index(channel[u'channelId'])):
+        try:
+            thumb = R(CHANNEL_LIST[channel[u'channelId']][u'thumb']),
+        except:
+            thumb = None
+        try:
+            art = R(CHANNEL_LIST[channel[u'channelId']][u'art'])
+        except:
+            art = None
         oc.add(
             VideoClipObject(
                 url = PLAY_CHANNEL_URL() % channel[u'channelId'],
@@ -238,8 +326,8 @@ def Channels():
                                                             channel['programList'][1]['title'] if len(channel['programList'])>1 else " " ,\
                                                             channel['programList'][1]['subtitle'] if len(channel['programList'])>1 else " ",\
                                                             channel['programList'][1]['contentDescription'] if len(channel['programList'])>1 else " "),
-                thumb = R(CHANNEL_LIST[channel[u'channelId']][u'thumb']),
-                art = R(CHANNEL_LIST[channel[u'channelId']][u'art'])
+                thumb = thumb,
+                art = art
             )
         )
     return oc
@@ -681,7 +769,8 @@ def MijnOpnames():
             )
         )
     return oc
-    
+
+@route(VIDEO_PREFIX + '/opnames/type')
 def RecordType(type=u"ALL"):
     try:
         records = GetRecodings(type)
@@ -734,7 +823,7 @@ def DeleteRecord(id , userStartTimeMarker):
     
 #####################################################################
 
-@auth(Prefs)
+@auth()
 def GetRecodings(type=u"ALL"):
     prams = {
         u'action' : u'GetRecordingList',
@@ -743,6 +832,9 @@ def GetRecodings(type=u"ALL"):
         u'stateOfRecording': type
     }
     url = buildURL(API_URL() , prams)
+    
+    LogCookies()
+    
     epg = JSON.ObjectFromURL(url , cacheTime=0)
     Log.Info(epg)
     if len(epg[u'errorDescription']):
@@ -750,7 +842,7 @@ def GetRecodings(type=u"ALL"):
     return epg[u'resultObj']
 
 # programStartTime is een unix time *1000
-@auth(Prefs)
+@auth()
 def SetRecodings(externalChannelId , programRefNr , programStartTime):
     prams = {
         u'action' : u'SetRecording',
@@ -767,7 +859,7 @@ def SetRecodings(externalChannelId , programRefNr , programStartTime):
         raise LoginException(epg[u'message'])
     return epg
 
-@auth(Prefs)
+@auth()
 def DelRecodings(id , userStartTimeMarker):
     prams = {
         u'action' : u'DeleteRecordings',
@@ -783,7 +875,7 @@ def DelRecodings(id , userStartTimeMarker):
         raise LoginException(epg[u'message'])
     return epg[u'resultObj']
 
-@auth(Prefs)
+@auth()
 def GetRentMovies():
     prams = {
         u'action' : u'GetRentedMovies',
@@ -797,7 +889,7 @@ def GetRentMovies():
         raise LoginException(epg[u'message'])
     return epg[u'resultObj']
 
-@auth(Prefs)
+@auth()
 def BuyRentMovie(id , pin):
     prams = {
         u'action' : u'ContentPurchase',
@@ -818,7 +910,7 @@ def BuyRentMovie(id , pin):
         raise LoginException(epg[u'message'])
     return True
 
-@auth(Prefs)
+@auth()
 def CheckContentRights(id):
     prams = {
         u'action' : u'CheckContentRights',
@@ -840,6 +932,43 @@ def CheckContentRights(id):
         Log.Critical(epg)
         raise LoginException(epg[u'message'])
 
+@auth()
+def GetProfiel():
+    if u'tan' not in Dict:
+        raise LoginException(u"tan not in Dict")
+    prams = {
+        u'action' : u'GetProfile',
+        u'channel' : u'PCTV',
+        u'crmAccountId' : Dict[u'tan'],
+        u'_' : Datetime.Now()
+    }
+    url = buildURL(SEC_API_URL() , prams)
+    epg = JSON.ObjectFromURL(url)
+    
+    Log.Info(epg)
+    
+    if len(epg[u'errorDescription']):
+        Log.Critical(epg)
+        raise LoginException(epg[u'message'])
+    return epg[u'resultObj']
+
+def GetPackageIds():
+    profiel = GetProfiel()
+    ids = []
+    for package in profiel[u'packageList']:
+        ids.append(package[u'packageId'])
+    return ids
+
+#####################################################################
+
+@route(VIDEO_PREFIX + '/dummy')
+def dummy():
+    pass
+
+@route(VIDEO_PREFIX + '/imageHelper' , id=str)
+def imageHelper(id):
+    return DataObject(Resource.Load(CHANNEL_LIST[id][u'thumb']) , 'image/png')
+
 #####################################################################
 
 from datetime import datetime
@@ -856,10 +985,63 @@ def buildURL(base , args):
     Log.Info(u"%s?%s" % (base , urllib.urlencode(parms)))
     return u"%s?%s" % (base , urllib.urlencode(parms))
 
-@route(VIDEO_PREFIX + '/dummy')
-def dummy():
+#####################################################################
+
+class LoginException(Exception):
     pass
 
-@route(VIDEO_PREFIX + '/imageHelper' , id=str)
-def imageHelper(id):
-    return DataObject(Resource.Load(CHANNEL_LIST[id][u'thumb']) , 'image/png')
+def auth(Force=False):
+    def auth_deco(f):
+        def real_auth(*args , **kwargs):
+            if not NeedLogin() and not Force:
+                prams = {
+                    'action' : 'KeepAlive',
+                    'channel' : 'PCTV'
+                }
+                url = buildURL(API_URL() , prams)
+                data = JSON.ObjectFromURL(url , cacheTime=0)
+                
+                Log.Info(data)
+                
+                if not len(data['errorDescription']):
+                    return f(*args , **kwargs)
+            
+            HTTP.ClearCookies()
+            
+            prams = {
+                'action' : 'IpAuthentication',
+                'channel' : 'PCTV'
+            }
+            url = buildURL(API_URL() , prams)
+            data = JSON.ObjectFromURL(url , cacheTime=0)
+            
+            if len(data["errorDescription"]):
+                Log.Exception(JSON.StringFromObject(data))
+                if data['errorDescription'] == "ACN_3055":
+                    raise LoginException("Login Error : Je bent niet binnen een netwerk van KPN of Telfort.")
+                else:
+                    raise LoginException("Login Error : %s" % data['message'])
+
+            return f(*args , **kwargs)
+        return real_auth
+    return auth_deco
+
+def NeedLogin():
+    "this functions makes sure we only login if we absolutely have to"
+    l = []
+    for c in HTTP.Cookies:
+        if c.name in ['ACE' , 'JSESSIONID' , 'avs_cookie'] and domeinRegex.search(c.domain):
+            l.append(c.name)
+            if c.is_expired():
+                Log.Info("relogin : Cookie us expired : %s" % c.name)
+                return True
+    for k in ['ACE' , 'JSESSIONID' , 'avs_cookie']:
+        if k not in l:
+            Log.Info("relogin : Missing Cookie : %s" % k)
+            return True
+    return False
+
+def LogCookies():
+    Log.Info("Displaying Cookies")
+    for c in HTTP.Cookies:
+        Log.Info(c.name)
