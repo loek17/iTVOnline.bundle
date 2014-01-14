@@ -8,8 +8,7 @@
 #
 #####################################################################
 
-#auth = SharedCodeService.commen.auth
-#LoginException = SharedCodeService.commen.LoginException
+# no global imports (import are infront of function)
 
 #####################################################################
 
@@ -46,21 +45,24 @@ DOMEIN_DICT = {
 }
 
 # Plex media center ondersteund geen versleutelde http live streaming
-EXCULUDE_CLIENT_DICT = [
+EXCLUDE_CLIENT_DICT = [
     ClientPlatform.MacOSX,
     ClientPlatform.Linux,
     ClientPlatform.Windows
 ]
 
-PACKAGE_EXCULUDE = [
+#don't add hd Channels
+PACKAGE_EXCLUDE = [
     366,
     548,
     569,
     548
 ]
 
-#'18;19;20;21;22;23;24;25;26;27;30;31;29;28;32;33;34;175;39;40;37;38;176;41;42;43;44;45;47;54;58'
-CHANNELS_ORDERD = [ '18','19','20','21','22','23','24','25','26','27','30','31','29','205','32','33','34','28','175','39','40','37','38','176','41','42','43','44','45','47','190','100','28']
+#Don't add special case hd channels
+CHANNEL_EXCLUDE = [
+]
+
 CHANNEL_LIST = {
     '18': {u'name' : u'Nederland 1' , u'thumb' : u'Nederland 1.png', u'art' : u'Nederland_Art.jpg'},
     '19': {u'name' : u'Nederland 2' , u'thumb' : u'Nederland 2.png', u'art' : u'Nederland_Art.jpg'},
@@ -214,7 +216,7 @@ def ValidatePrefs():
 
 @handler(VIDEO_PREFIX, NAME, ICONS[Prefs['provider']] , ART)
 def MainMenu():
-    if Client.Platform in EXCULUDE_CLIENT_DICT:
+    if Client.Platform in EXCLUDE_CLIENT_DICT:
         oc = ObjectContainer(
             objects = [
                 DirectoryObject(
@@ -292,7 +294,7 @@ def Channels():
     channelIds = []
     for channel in channelData['channelList']:
         for package in channel[u'packageList']:
-            if package[u'packageId'] in packageIds and package[u'packageId'] not in PACKAGE_EXCULUDE:
+            if package[u'packageId'] in packageIds and package[u'packageId'] not in PACKAGE_EXCLUDE and channel[u'channelId'] not in CHANNEL_EXCLUDE:
                 channelIds.append(unicode(channel[u'channelId']))
                 break
 
@@ -705,20 +707,20 @@ def VideoTheekPopulair():
 @route(VIDEO_PREFIX + '/videotheek/display' , video=dict , allow_sync=True)
 def DisplayVideo(video):
     oc = ObjectContainer(title2 = u"Videotheek")
-    video = URLService.MetadataObjectForURL(PLAY_VIDEOTHEEK_URL() % video[u'contentId'])
+    videoItem = URLService.MetadataObjectForURL(PLAY_VIDEOTHEEK_URL() % video[u'contentId'])
 
     if CheckContentRights(video[u'contentId']):
-        oc.add(video)
+        oc.add(videoItem)
     else:
-        video.title = u"Trailer"
-        oc.add(video)
-        prijs = prijsRegex.findall(video.summary)[0]
+        videoItem.title = u"Trailer"
+        oc.add(videoItem)
+        prijs = prijsRegex.findall(videoItem.summary)[0]
         Log.Info(prijs)
         oc.add(
             PopupDirectoryObject(
                 key = Callback(AskBuy , video=video , price=prijs),
                 title = u"Film Huren",
-                summary = video.summary
+                summary = videoItem.summary
             )
         )
     return oc
@@ -732,14 +734,14 @@ def AskBuy(video , price):
                 title = u"Terug"
             ),
             DirectoryObject(
-                key = Callback(BuyMovie),
+                key = Callback(BuyMovie , video=video),
                 title = u"Huur deze film voor %s" % price
             )
         ]
     )
     return oc
 
-def BuyMovie():
+def BuyMovie(video):
     return ObjectContainer(header=u"Niet ondersteunt" , message="Deze functie wordt helaas niet ondersteunt door deze plugin")
     
 def buildVideoList(catList):
