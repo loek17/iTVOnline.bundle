@@ -67,7 +67,8 @@ def MetadataObjectForURL(url):
         title = program['title'],
         summary = '%s \n\n%s' %(program['subtitle'] , program['contentDescription']),
         duration = program['duration'] * 1000 - (time - program['startTime']),
-        thumb = "/video/itvonline/imageHelper?id=%s" % IdLiveRegex.search(url).group("id")
+        thumb = "/video/itvonline/imageHelper?id=%s" % IdLiveRegex.search(url).group("id"),
+        art = "/video/itvonline/imageHelper?id=%s&art=True" % IdLiveRegex.search(url).group("id")
     )
     return vc
     
