@@ -362,7 +362,6 @@ def Channels():
                 channelIds.append(unicode(channel[u'channelId']))
                 break
     
-    channelIds = CHANNEL_LIST.keys()
     prams = {
         u'action' : u'GetEpg',
         u'channel':u'PCTV' , 
