@@ -1030,6 +1030,7 @@ def GetPackageIds():
 def GetChannelIds():
     if not Cache['CHANNELS']['LiveChannels'].expired:
         Log.Info('Returning Channel ids from Cache')
+        Log.Info(Cache['CHANNELS']['LiveChannels'].ids)
         return Cache['CHANNELS']['LiveChannels'].ids
     
     prams = {
@@ -1052,6 +1053,8 @@ def GetChannelIds():
     
     Cache['CHANNELS']['LiveChannels'].ids = channelIds
     Cache['CHANNELS']['LiveChannels'].set_expiry_interval(CACHE_1DAY)
+    
+    Log.Info(channelIds)
     
     return channelIds
 
