@@ -345,23 +345,8 @@ def MainMenu():
 def Channels():
     Log.Info("##########################  Channels  #################################")
     oc = ObjectContainer(title2 = u"Live TV")
-    prams = {
-        u'action' : u'GetLiveChannels',
-        u'channel': u'PCTV'
-    }
-    url = buildURL(API_URL() , prams)
-    channelData = JSON.ObjectFromURL(url , cacheTime=CACHE_1MINUTE*5)[u'resultObj']
-    
-    Log.Info(channelData)
-    
-    packageIds = GetPackageIds()
-    channelIds = []
-    for channel in channelData['channelList']: 
-        for package in channel[u'packageList']:
-            if package[u'packageId'] in packageIds and package[u'packageId'] not in PACKAGE_EXCLUDE and channel[u'channelId'] not in CHANNEL_EXCLUDE and channel[u'channelType'] == u'Extended':
-                channelIds.append(unicode(channel[u'channelId']))
-                break
-    
+
+    channelIds = GetChannelIds()
     prams = {
         u'action' : u'GetEpg',
         u'channel':u'PCTV' , 
@@ -375,8 +360,6 @@ def Channels():
     Log.Info(epg)
     
     channels = epg[u'resultObj'][u'channelList']
-    
-    
     for channel in sorted(channels , key=lambda channel : channelIds.index(channel[u'channelId'])):
         oc.add(
             VideoClipObject(
@@ -405,7 +388,7 @@ def Gids():
         u'channel':u'PCTV' , 
         u'startTimeStamp': Datetime.Now(), 
         u'maxResultsPerChannel':'2' , 
-        u'channelId':CHANNEL_LIST.keys()
+        u'channelId': GetChannelIds()
     }
     url = buildURL(API_URL() , prams)
     epg = JSON.ObjectFromURL(url , cacheTime=CACHE_1MINUTE*5)
@@ -1028,7 +1011,7 @@ def GetProfiel():
         u'_' : Datetime.Now()
     }
     url = buildURL(SEC_API_URL() , prams)
-    epg = JSON.ObjectFromURL(url , cacheTime=CACHE_1DAY)
+    epg = JSON.ObjectFromURL(url , cacheTime=0)
     
     Log.Info(epg)
     
@@ -1043,6 +1026,34 @@ def GetPackageIds():
     for package in profiel[u'packageList']:
         ids.append(package[u'packageId'])
     return ids
+
+def GetChannelIds():
+    if not Cache['CHANNELS']['LiveChannels'].expired:
+        Log.Info('Returning Channel ids from Cache')
+        return Cache['CHANNELS']['LiveChannels'].ids
+    
+    prams = {
+        u'action' : u'GetLiveChannels',
+        u'channel': u'PCTV'
+    }
+    url = buildURL(API_URL() , prams)
+    channelData = JSON.ObjectFromURL(url , cacheTime=CACHE_1MINUTE*5)[u'resultObj']
+    
+    Log.Info(channelData)
+    
+    packageIds = GetPackageIds()
+    channelIds = []
+    for channel in channelData['channelList']:
+        if channel[u'channelType'] == u'Extended' and channel[u'channelId'] not in CHANNEL_EXCLUDE:
+            for package in channel[u'packageList']:
+                if package[u'packageId'] in packageIds and package[u'packageId'] not in PACKAGE_EXCLUDE:
+                    channelIds.append(unicode(channel[u'channelId']))
+                    break
+    
+    Cache['CHANNELS']['LiveChannels'].ids = channelIds
+    Cache['CHANNELS']['LiveChannels'].set_expiry_interval(CACHE_1DAY)
+    
+    return channelIds
 
 #####################################################################
 

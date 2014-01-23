@@ -94,6 +94,7 @@ def MediaObjectsForURL(url):
 
 ####################################################################################################
 
+@indirect
 def PlayHTTPLiveStream(url):
 
     if needLoginIphone():
@@ -118,8 +119,11 @@ def PlayHTTPLiveStream(url):
     m3u8_url = data.find(".//channel[@src]").get('src')
     
     if m3u8_url == "http://fl.media01.kpnstreaming.nl/vod/_definst_/kpn/itvonline/MTP-WEBTV-IPAD/KPNVIDEOS/INTRO/video-3.mp4/playlist.m3u8":
+        Log.Info("############## Ex.MediaNotAvailable ###############")
         raise Ex.MediaNotAvailable
-    return HTTPLiveStreamPlayList(m3u8_url)
+        #return ObjectContainer(header=u"Error" , message=u"Kanaal niet beschikbaar")
+    Log.Info(Callback(HTTPLiveStreamPlayList , m3u8_url=m3u8_url))
+    return IndirectResponse(VideoClipObject, key=HTTPLiveStreamURL(Callback(HTTPLiveStreamPlayList , m3u8_url=m3u8_url , ext='m3u8')))
     
 ####################################################################################################
 
@@ -135,6 +139,7 @@ def HTTPLiveStreamPlayList(m3u8_url):
     Log.Info(playlist)
     
     authToken = getPlexAuthToken()
+    callbackUrl = 'http://%s:32400%%s%s' % (Network.PublicAddress , '&X-Plex-Token=%s' % authToken) if authToken else (Network.Address , '')
     newPlaylist = []
     for line in playlist.splitlines():
         if line.startswith('#'):
@@ -145,7 +150,7 @@ def HTTPLiveStreamPlayList(m3u8_url):
         else:
             if not line.startswith('http'):
                 line = m3u8_url.rsplit('/' , 1)[0] + '/' + line
-            newLine = 'http://%s:32400%s' % (Network.PublicAddress , Callback(HTTPLiveSteamChunkList , url = line , bandwidth=bandwidth , authToken=authToken, ext='m3u8') + ('&X-Plex-Token=%s' % authToken if authToken else ''))
+            newLine = callbackUrl % Callback(HTTPLiveSteamChunkList , url = line , bandwidth=bandwidth , authToken=authToken, ext='m3u8')
             newPlaylist.append(newLine)
     
     newPlaylist = '\n'.join(newPlaylist)+'\n'
