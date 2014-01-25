@@ -139,7 +139,7 @@ def HTTPLiveStreamPlayList(m3u8_url):
     Log.Info(playlist)
     
     authToken = getPlexAuthToken()
-    callbackUrl = 'http://%s:32400%%s%s' % (Network.PublicAddress , '&X-Plex-Token=%s' % authToken) if authToken else (Network.Address , '')
+    callbackUrl = 'http://%s:32400%%s%s' % ((Network.PublicAddress , '&X-Plex-Token=%s' % authToken) if authToken else (Network.Address , ''))
     newPlaylist = []
     for line in playlist.splitlines():
         if line.startswith('#'):
