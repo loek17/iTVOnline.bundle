@@ -1028,10 +1028,11 @@ def GetPackageIds():
     return ids
 
 def GetChannelIds():
-    if not Cache['CHANNELS']['LiveChannels'].expired:
+    channelCache = Cache['CHANNELS']['LiveChannels']
+    if not channelCache.expired:
         Log.Info('Returning Channel ids from Cache')
-        Log.Info(Cache['CHANNELS']['LiveChannels'].ids)
-        return Cache['CHANNELS']['LiveChannels'].ids
+        Log.Info(channelCache.ids)
+        return channelCache.ids
     
     prams = {
         u'action' : u'GetLiveChannels',
@@ -1047,12 +1048,12 @@ def GetChannelIds():
     for channel in channelData['channelList']:
         if channel[u'channelType'] == u'Extended' and channel[u'channelId'] not in CHANNEL_EXCLUDE:
             for package in channel[u'packageList']:
-                if package[u'packageId'] in packageIds and package[u'packageId'] not in PACKAGE_EXCLUDE:
+                if package[u'packageId'] in packageIds and package[u'packageType'] == u'LIVE_SUB' and package[u'packageId'] not in PACKAGE_EXCLUDE:
                     channelIds.append(unicode(channel[u'channelId']))
                     break
     
-    Cache['CHANNELS']['LiveChannels'].ids = channelIds
-    Cache['CHANNELS']['LiveChannels'].set_expiry_interval(CACHE_1DAY)
+    channelCache.ids = channelIds
+    channelCache.set_expiry_interval(CACHE_1DAY)
     
     Log.Info(channelIds)
     
@@ -1064,9 +1065,9 @@ def GetChannelIds():
 def dummy():
     pass
 
-@route(VIDEO_PREFIX + '/imageHelper' , id=str , art=bool)
-def imageHelper(id , art=False):
-    return DataObject(Resource.Load(getResourceName(id , art)) , 'image/png')
+@route(VIDEO_PREFIX + '/imageHelper' , id=str , art=bool , client=str)
+def imageHelper(id , art=False , client=None):
+    return DataObject(Resource.Load(getResourceName(id , art , client)) , 'image/png')
 
 #####################################################################
 
@@ -1084,14 +1085,14 @@ def buildURL(base , args):
     Log.Info(u"%s?%s" % (base , urllib.urlencode(parms)))
     return u"%s?%s" % (base , urllib.urlencode(parms))
 
-def getResourceName(id , art=False):
+def getResourceName(id , art=False , client=None):
     if art:
         try:
             return CHANNEL_LIST[id][u'art']
         except KeyError:
             return u''
 
-    thumbName = THUMB_DICT.get(Client.Platform , THUMB_DICT.get(Client.Product , THUMB_DICT[u'Default']))
+    thumbName = THUMB_DICT.get(client , THUMB_DICT.get(Client.Platform , THUMB_DICT.get(Client.Product , THUMB_DICT[u'Default'])))
     try:
         return CHANNEL_LIST[id][u'thumb'][thumbName]
     except KeyError:
@@ -1099,8 +1100,3 @@ def getResourceName(id , art=False):
         
        
 #####################################################################
-
-def LogCookies():
-    Log.Info("Displaying Cookies")
-    for c in HTTP.Cookies:
-        Log.Info(c.name)
