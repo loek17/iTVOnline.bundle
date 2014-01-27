@@ -37,7 +37,7 @@ PLAY_VIDEOTHEEK_URL = lambda : BASE_URL() + u"/videotheek/spelen/%s"
 PLAY_CHANNEL_URL = lambda : BASE_URL() + u"/?channelId=%s"
 
 prijsRegex = Regex("^prijs : (.*)$" , Regex.MULTILINE)
-domeinRegex = Regex("\.itvonline\.nl$")
+CookieRegex = Regex("\.itvonline\.nl$")
 
 DOMEIN_DICT = {
     u'KPN' : u'www',
@@ -188,20 +188,21 @@ def auth(Force=False):
     def auth_deco(f):
         def real_auth(*args , **kwargs):
             if not NeedLogin() and not Force:
-                prams = {
-                    'action' : 'KeepAlive',
-                    'channel' : 'PCTV'
-                }
-                url = buildURL(API_URL() , prams)
-                data = JSON.ObjectFromURL(url , cacheTime=0)
-                
-                Log.Info(data)
-                
-                if not len(data['errorDescription']):
-                    try:
-                        return f(*args , **kwargs)
-                    except LoginException:
-                        pass
+                try:
+                    ret =  f(url , *args , **kwargs)
+                except LoginException:
+                    pass
+                else:
+                    prams = {
+                        'action' : 'KeepAlive',
+                        'channel' : 'IPAD'
+                    }
+                    DataUrl = buildURL(API_URL(url) , prams)
+                    data = JSON.ObjectFromURL(DataUrl , cacheTime=0)
+
+                    Log.Info(data)
+                    
+                    return ret
             
             HTTP.ClearCookies()
             
@@ -229,7 +230,7 @@ def NeedLogin():
     "this functions makes sure we only login if we absolutely have to"
     l = []
     for c in HTTP.Cookies:
-        if c.name in ['ACE' , 'JSESSIONID' , 'avs_cookie'] and domeinRegex.search(c.domain):
+        if c.name in ['ACE' , 'JSESSIONID' , 'avs_cookie'] and CookieRegex.search(c.domain):
             l.append(c.name)
             if c.is_expired():
                 return True

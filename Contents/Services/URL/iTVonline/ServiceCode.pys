@@ -23,6 +23,7 @@ BandwidthRegex = Regex('#EXT-X-STREAM-INF:PROGRAM-ID=\d+,BANDWIDTH=(?P<bandwidth
 IdVideoRegex = Regex('/spelen/(?P<id>\d+)')
 IdLiveRegex = Regex('channelId=(?P<id>\d+)')
 DomeinRegex = Regex('http://(?P<sub_domein>.*)\.itvonline\.nl')
+CookieRegex = Regex("\.itvonline\.nl$")
 
 SUB_DOMEIN_DICT = {
     u'www' : u'iphone',
@@ -40,6 +41,63 @@ eHLS_CLIENTS = [
     "Plex Home Theater"
 ]
 
+#####################################################################
+
+class LoginException(Exception):
+    pass
+
+def auth(Force=False):
+    def auth_deco(f):
+        def real_auth(url , *args , **kwargs):
+            if not NeedLogin() and not Force:
+                try:
+                    ret =  f(url , *args , **kwargs)
+                except LoginException:
+                    pass
+                else:
+                    prams = {
+                        'action' : 'KeepAlive',
+                        'channel' : 'IPAD'
+                    }
+                    DataUrl = buildURL(API_URL(url) , prams)
+                    data = JSON.ObjectFromURL(DataUrl , cacheTime=0)
+
+                    Log.Info(data)
+                    
+                    return ret
+
+            HTTP.ClearCookies()
+            
+            prams = {
+                'action' : 'IpAuthentication',
+                'channel' : 'IPAD'
+            }
+            DataUrl = buildURL(SEC_API_URL(url) , prams)
+            data = JSON.ObjectFromURL(DataUrl , cacheTime=0)
+            
+            if len(data["errorDescription"]):
+                Log.Exception(JSON.StringFromObject(data))
+                if data['errorDescription'] == "ACN_3055":
+                    raise LoginException("Login Error : Je bent niet binnen een netwerk van KPN of Telfort.")
+                else:
+                    raise LoginException("Login Error : %s" % data['message'])
+
+            return f(url , *args , **kwargs)
+        return real_auth
+    return auth_deco
+
+def NeedLogin():
+    "this functions makes sure we only login if we absolutely have to"
+    l = []
+    for c in HTTP.Cookies:
+        if c.name in ['ACE' , 'JSESSIONID' , 'avs_cookie']:# and CookieRegex.search(c.domain):
+            l.append(c.name)
+            if c.is_expired():
+                return True
+    for k in ['ACE' , 'JSESSIONID' , 'avs_cookie']:
+        if k not in l:
+            return True
+    return False
 
 #####################################################################
 
@@ -96,33 +154,18 @@ def MediaObjectsForURL(url):
 
 @indirect
 def PlayHTTPLiveStream(url):
-
-    if needLoginIphone():
-        try:
-            iphoneAuth(url)
-        except:
-            Log.Exception('unable to auth : Auth mislukt, bevindt u zich in een KPN netwerk?')
-            return ObjectContainer(header=u"Error" , message=u"Auth mislukt, bevindt u zich in een KPN netwerk?")
-    
-    prams = {
-        'type' : 'LIVE',
-        'id' : IdLiveRegex.search(url).group("id"),
-        'action' : 'GetCDN',
-        'deviceType' : 'iPhone;6.1;2.3.6;K',
-        'channel' : 'IPAD'
-    }
-    hlsUrl = buildURL(SEC_API_URL(url) , prams)
-    data = XML.ElementFromURL(hlsUrl , cacheTime=0)
-    
-    Log.Info(HTML.StringFromElement(data))
-    
-    m3u8_url = data.find(".//channel[@src]").get('src')
+    try:
+        m3u8_url = GetCDN(url)
+    except LoginException as e:
+        Log.Exception('unable to auth : Auth mislukt, bevindt u zich in een KPN netwerk?')
+        raise Ex.MediaNotAuthorized
+        #return ObjectContainer(header=u"Error" , message=unicode(e))
     
     if m3u8_url == "http://fl.media01.kpnstreaming.nl/vod/_definst_/kpn/itvonline/MTP-WEBTV-IPAD/KPNVIDEOS/INTRO/video-3.mp4/playlist.m3u8":
         Log.Info("############## Ex.MediaNotAvailable ###############")
         raise Ex.MediaNotAvailable
         #return ObjectContainer(header=u"Error" , message=u"Kanaal niet beschikbaar")
-    Log.Info(Callback(HTTPLiveStreamPlayList , m3u8_url=m3u8_url))
+
     return IndirectResponse(VideoClipObject, key=HTTPLiveStreamURL(Callback(HTTPLiveStreamPlayList , m3u8_url=m3u8_url , ext='m3u8')))
     
 ####################################################################################################
@@ -164,7 +207,7 @@ def HTTPLiveSteamChunkList(url , bandwidth , authToken):
         playlist =  HTTP.Request(url, cacheTime=0).content
     except:
         Log.Info(" Error downloading playlist , bandwidth = %s" % bandwidth)
-        return
+        return "#E"
 
     Log.Info(playlist)
 
@@ -193,43 +236,42 @@ def HTTPLiveSteamPassword(url):
     
 #####################################################################
 
-import urllib2
+@auth()
+def GetCDN(url):
+    prams = {
+        'type' : 'LIVE',
+        'id' : IdLiveRegex.search(url).group("id"),
+        'action' : 'GetCDN',
+        'deviceType' : 'iPhone;6.1;2.3.6;K',
+        'channel' : 'IPAD'
+    }
+    hlsUrl = buildURL(SEC_API_URL(url) , prams)
+    data = XML.ElementFromURL(hlsUrl , cacheTime=0)
+    m3u8_url = data.find(".//channel[@src]").get('src')
+    
+    Log.Info(HTML.StringFromElement(data))
+    Log.Info(m3u8_url)
+
+    if data.find('.//meta[@name="code"]').get('content') != "200":
+        raise LoginException("Login Error : Je hebt geen toestemming om dit kanaal te bekijken.")
+
+    return m3u8_url
+    
+#####################################################################
+
+import urllib
 def getPlexAuthToken():
     """ get the plextoken to use if the client isn't local, is there a better why to do this?? """
     try:
-        authToken = XML.ElementFromString(urllib2.urlopen('http://localhost:32400/myplex/account').read()).get('authToken')
+        data = XML.ElementFromString(urllib.urlopen('http://localhost:32400/myplex/account').read())
+        if data.get('mappingState') != "mapped":
+            raise Exception('dummy')
     except:
         authToken = None
-    return authToken
-
-def iphoneAuth(url):
-
-    HTTP.ClearCookies()
-    
-    prams = {
-        'deviceType' : 'iPhone;6.1;2.3.6;K',
-        'action' : 'IpAuthentication',
-        'channel' : 'IPAD'
-    }
-    url = buildURL(SEC_API_URL(url) , prams)
-    info = JSON.ObjectFromURL(url , cacheTime=0)
+    else:
+        authToken = data.get('authToken')
         
-    if len(info["errorDescription"]):
-        raise Ex.MediaGeoblocked
-
-DOMEIN_REGEX = Regex("iphone\.itvonline\.nl$")
-def needLoginIphone():
-    "this functions makes sure we only login if we absolutely have to"
-    l = []
-    for c in HTTP.Cookies:
-        if c.name in ['ACE' , 'JSESSIONID' , 'avs_cookie'] and DOMEIN_REGEX.search(c.domain):
-            l.append(c.name)
-            if c.is_expired():
-                return True
-    for k in ['ACE' , 'JSESSIONID' , 'avs_cookie']:
-        if k not in l:
-            return True
-    return False
+    return authToken
 
 from datetime import datetime
 import urllib
@@ -246,3 +288,34 @@ def buildURL(base , args):
     return "%s?%s" % (base , urllib.urlencode(parms))
 
 #####################################################################
+
+# old code
+def iphoneAuth(url):
+
+    HTTP.ClearCookies()
+    
+    prams = {
+        'deviceType' : 'iPhone;6.1;2.3.6;K',
+        'action' : 'IpAuthentication',
+        'channel' : 'IPAD'
+    }
+    url = buildURL(SEC_API_URL(url) , prams)
+    info = JSON.ObjectFromURL(url , cacheTime=0)
+        
+    if len(info["errorDescription"]):
+        raise Ex.MediaGeoblocked
+
+#old code
+DOMEIN_REGEX = Regex("iphone\.itvonline\.nl$")
+def needLoginIphone():
+    "this functions makes sure we only login if we absolutely have to"
+    l = []
+    for c in HTTP.Cookies:
+        if c.name in ['ACE' , 'JSESSIONID' , 'avs_cookie']: # and DOMEIN_REGEX.search(c.domain):
+            l.append(c.name)
+            if c.is_expired():
+                return True
+    for k in ['ACE' , 'JSESSIONID' , 'avs_cookie']:
+        if k not in l:
+            return True
+    return False

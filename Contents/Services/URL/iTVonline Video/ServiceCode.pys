@@ -60,34 +60,76 @@ HLS_TYPE = {
     'SVOD_CATCHUP' : 'VOD'
 }
 
+#####################################################################
+
+class LoginException(Exception):
+    pass
+
+def auth(Force=False):
+    def auth_deco(f):
+        def real_auth(url , *args , **kwargs):
+            if not NeedLogin() and not Force:
+                try:
+                    ret =  f(url , *args , **kwargs)
+                except LoginException:
+                    pass
+                else:
+                    prams = {
+                        'action' : 'KeepAlive',
+                        'channel' : 'IPAD'
+                    }
+                    DataUrl = buildURL(API_URL(url) , prams)
+                    data = JSON.ObjectFromURL(DataUrl , cacheTime=0)
+
+                    Log.Info(data)
+                    
+                    return ret
+            
+            HTTP.ClearCookies()
+            
+            prams = {
+                'action' : 'IpAuthentication',
+                'channel' : 'IPAD'
+            }
+            DataUrl = buildURL(SEC_API_URL(url) , prams)
+            data = JSON.ObjectFromURL(DataUrl , cacheTime=0)
+            
+            if len(data["errorDescription"]):
+                Log.Exception(JSON.StringFromObject(data))
+                if data['errorDescription'] == "ACN_3055":
+                    raise LoginException("Login Error : Je bent niet binnen een netwerk van KPN of Telfort.")
+                else:
+                    raise LoginException("Login Error : %s" % data['message'])
+
+            return f(url , *args , **kwargs)
+        return real_auth
+    return auth_deco
+
+def NeedLogin():
+    "this functions makes sure we only login if we absolutely have to"
+    l = []
+    for c in HTTP.Cookies:
+        if c.name in ['ACE' , 'JSESSIONID' , 'avs_cookie']:# and CookieRegex.search(c.domain):
+            l.append(c.name)
+            if c.is_expired():
+                return True
+    for k in ['ACE' , 'JSESSIONID' , 'avs_cookie']:
+        if k not in l:
+            return True
+    return False
+
 ####################################################################################################
 
 def NormalizeURL(url):
     return url.split('?' , 1)[0]
 
 def MetadataObjectForURL(url):
-    
-    if needLoginIphone():
-        try:
-            iphoneAuth(url)
-        except:
-            failAuth = True
-        else:
-            failAuth = False
-    else:
-        failAuth = False
-    
-    prams = {
-        'action' : 'GetContentDetails',
-        'channel' : 'IPAD',
-        'contentId' : IdVideoRegex.search(url).group("id")
-    }
-    dataUrl = buildURL(API_URL(url) , prams)
-    Log.Info(dataUrl)
-    data = JSON.ObjectFromURL(dataUrl , cacheTime=CACHE_1DAY)
-    video = data['resultObj']['content']
-    
-    Log.Info(data['resultObj']['content'])
+    try:
+        video = GetContentDetails(url)
+    except LoginException as e:
+        Log.Exception('unable to auth : Auth mislukt, bevindt u zich in een KPN netwerk?')
+        raise Ex.MediaNotAvailable
+        #return ObjectContainer(header=u"Error" , message=unicode(e))
 
     try:
         rating = float(video[u'totalStars'])*2
@@ -103,8 +145,6 @@ def MetadataObjectForURL(url):
         year = 0
     
     if video['broadcastChannelName']:
-        if failAuth:
-            return ObjectContainer(header=u"Error" , message=u"Auth mislukt, bevindt u zich in een KPN netwerk?")
         vc = VideoClipObject(
             title = video['contentTitle'],
             genres = video['genre'].split(','),
@@ -158,43 +198,14 @@ def MediaObjectsForURL(url):
 @indirect
 def PlayHTTPLiveStreamPlayList(url):
 
-    if needLoginIphone():
-        try:
-            iphoneAuth(url)
-        except:
-            failAuth = True
-        else:
-            failAuth = False
-    else:
-        failAuth = False
+    video = GetContentDetails(url)
     
-    prams = {
-        'action' : 'GetContentDetails',
-        'channel' : 'IPAD',
-        'contentId' : IdVideoRegex.findall(url)[0]
-    }
-    dataUrl = buildURL(API_URL(url) , prams)
-    data = JSON.ObjectFromURL(dataUrl , cacheTime=CACHE_1DAY)
-    
-    Log.Info(data)
-    
-    if data['resultObj']['content']['broadcastChannelName']:
-        if failAuth:
-            Log.Exception("Auth mislukt, bevindt u zich in een KPN netwerk?")
-            return ObjectContainer(header=u"Error" , message=u"Auth mislukt, bevindt u zich in een KPN netwerk?")
-    
-    prams = {
-        'type' : HLS_TYPE[data['resultObj']['content']['contentType']],
-        'id' : IdVideoRegex.findall(url)[0],
-        'action' : 'GetCDN',
-        'deviceType' : 'iPhone;6.1;2.3.6;K',
-        'channel' : 'IPAD'
-    }
-    hlsUrl = buildURL(SEC_API_URL(url) , prams)
-    data = XML.ElementFromURL(hlsUrl)
-    m3u8_url = data.find(".//video[@src]").get('src')
-    
-    Log.Info(HTML.StringFromElement(data))
+    try:
+        m3u8_url = GetCDN(url , HLS_TYPE[video['contentType']])
+    except LoginException as e:
+        Log.Exception('unable to auth : Auth mislukt, bevindt u zich in een KPN netwerk?')
+        raise Ex.MediaNotAvailable
+        #return ObjectContainer(header=u"Error" , message=unicode(e))
 
     return IndirectResponse(VideoClipObject, key=HTTPLiveStreamURL(Callback(HTTPLiveStreamPlayList , m3u8_url=m3u8_url , ext='m3u8')))
 
@@ -266,14 +277,73 @@ def HTTPLiveSteamPassword(url):
     
 #####################################################################
 
-import urllib2
+@auth()
+def GetCDN(url , type):
+    prams = {
+        'type' : type,
+        'id' : IdVideoRegex.search(url).group("id"),
+        'action' : 'GetCDN',
+        'deviceType' : 'iPhone;6.1;2.3.6;K',
+        'channel' : 'IPAD'
+    }
+    hlsUrl = buildURL(SEC_API_URL(url) , prams)
+    data = XML.ElementFromURL(hlsUrl , cacheTime=0)
+    m3u8_url = data.find(".//video[@src]").get('src')
+    
+    Log.Info(HTML.StringFromElement(data))
+    Log.Info(m3u8_url)
+
+    if data.find('.//meta[@name="code"]').get('content') != "200":
+        raise LoginException("Login Error : Je hebt geen toestemming om dit te bekijken.")
+
+    return m3u8_url
+
+@auth()
+def GetContentDetails(url):
+    prams = {
+        'action' : 'GetContentDetails',
+        'channel' : 'IPAD',
+        'contentId' : IdVideoRegex.search(url).group("id")
+    }
+    dataUrl = buildURL(API_URL(url) , prams)
+    data = JSON.ObjectFromURL(dataUrl , cacheTime=CACHE_1DAY)
+    
+    Log.Info(dataUrl)
+    Log.Info(data)
+    
+    return data['resultObj']['content']
+
+#####################################################################
+
+import urllib
 def getPlexAuthToken():
     """ get the plextoken to use if the client isn't local, is there a better why to do this?? """
     try:
-        authToken = XML.ElementFromString(urllib2.urlopen('http://localhost:32400/myplex/account').read()).get('authToken')
+        data = XML.ElementFromString(urllib.urlopen('http://localhost:32400/myplex/account').read())
+        if data.get('mappingState') != "mapped":
+            raise Exception('dummy')
     except:
         authToken = None
+    else:
+        authToken = data.get('authToken')
+        
     return authToken
+
+from datetime import datetime
+import urllib
+def buildURL(base , args):
+    parms = {}
+    for k ,v in args.iteritems():
+        if isinstance(v , list):
+            parms[k] = ";".join(v)
+        elif isinstance(v , datetime):
+            parms[k] = "%0.0f" % Datetime.TimestampFromDatetime(v)
+        else:
+            parms[k] = v
+    #Log.Info("%s?%s" % (base , urllib.urlencode(parms)))
+    return "%s?%s" % (base , urllib.urlencode(parms))
+
+#####################################################################
 
 def iphoneAuth(url):
 
@@ -303,19 +373,3 @@ def needLoginIphone():
         if k not in l:
             return True
     return False
-
-from datetime import datetime
-import urllib
-def buildURL(base , args):
-    parms = {}
-    for k ,v in args.iteritems():
-        if isinstance(v , list):
-            parms[k] = ";".join(v)
-        elif isinstance(v , datetime):
-            parms[k] = "%0.0f" % Datetime.TimestampFromDatetime(v)
-        else:
-            parms[k] = v
-    #Log.Info("%s?%s" % (base , urllib.urlencode(parms)))
-    return "%s?%s" % (base , urllib.urlencode(parms))
-
-#####################################################################
