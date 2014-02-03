@@ -16,10 +16,12 @@ VIDEO_PREFIX = "/video/itvonline"
 NAME = "iTVOnline"
 
 ART = u'art-default.jpg'
+
 ICONS = {
     u'KPN' : u'KPN icon-default.png',
     u'Telfort' : u'Telford icon-default.png'
 }
+
 ICON_TV = u'icon-default.jpg'
 ICON_GIDS = u'Recent.png'
 ICON_MISS = u'History.png'
@@ -189,7 +191,7 @@ def auth(Force=False):
         def real_auth(*args , **kwargs):
             if not NeedLogin() and not Force:
                 try:
-                    ret =  f(url , *args , **kwargs)
+                    ret =  f(*args , **kwargs)
                 except LoginException:
                     pass
                 else:
@@ -197,7 +199,7 @@ def auth(Force=False):
                         'action' : 'KeepAlive',
                         'channel' : 'IPAD'
                     }
-                    DataUrl = buildURL(API_URL(url) , prams)
+                    DataUrl = buildURL(API_URL() , prams)
                     data = JSON.ObjectFromURL(DataUrl , cacheTime=0)
 
                     Log.Info(data)

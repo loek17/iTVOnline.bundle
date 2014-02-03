@@ -160,12 +160,15 @@ def PlayHTTPLiveStream(url):
         Log.Exception('unable to auth : Auth mislukt, bevindt u zich in een KPN netwerk?')
         raise Ex.MediaNotAuthorized
         #return ObjectContainer(header=u"Error" , message=unicode(e))
+    except:
+        Log.Exception('Error in getting CDN')
     
     if m3u8_url == "http://fl.media01.kpnstreaming.nl/vod/_definst_/kpn/itvonline/MTP-WEBTV-IPAD/KPNVIDEOS/INTRO/video-3.mp4/playlist.m3u8":
         Log.Info("############## Ex.MediaNotAvailable ###############")
         raise Ex.MediaNotAvailable
         #return ObjectContainer(header=u"Error" , message=u"Kanaal niet beschikbaar")
-
+    
+    #return IndirectResponse(VideoClipObject, key=m3u8_url)
     return IndirectResponse(VideoClipObject, key=HTTPLiveStreamURL(Callback(HTTPLiveStreamPlayList , m3u8_url=m3u8_url , ext='m3u8')))
     
 ####################################################################################################
@@ -263,14 +266,17 @@ import urllib
 def getPlexAuthToken():
     """ get the plextoken to use if the client isn't local, is there a better why to do this?? """
     try:
-        data = XML.ElementFromString(urllib.urlopen('http://localhost:32400/myplex/account').read())
+        dataStr = urllib.urlopen('http://localhost:32400/myplex/account').read()
+        data = XML.ElementFromString(dataStr)
         if data.get('mappingState') != "mapped":
             raise Exception('dummy')
     except:
         authToken = None
     else:
         authToken = data.get('authToken')
-        
+    
+    Log.Info("Mapping data myPlex : %s" %dataStr)
+    
     return authToken
 
 from datetime import datetime
