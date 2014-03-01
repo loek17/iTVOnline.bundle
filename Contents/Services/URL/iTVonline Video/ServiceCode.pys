@@ -207,7 +207,7 @@ def PlayHTTPLiveStreamPlayList(url):
         raise Ex.MediaNotAvailable
         #return ObjectContainer(header=u"Error" , message=unicode(e))
 
-    #return IndirectResponse(VideoClipObject, key=m3u8_url)
+    #return IndirectResponse(VideoClipObject, key=HTTPLiveStreamURL(m3u8_url))
     return IndirectResponse(VideoClipObject, key=HTTPLiveStreamURL(Callback(HTTPLiveStreamPlayList , m3u8_url=m3u8_url , ext='m3u8')))
 
 ####################################################################################################
