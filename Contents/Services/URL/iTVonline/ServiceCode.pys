@@ -41,6 +41,16 @@ eHLS_CLIENTS = [
     "Plex Home Theater"
 ]
 
+templog = Log.Info
+import re
+def log(string , *args , **kwargs):
+    test = re.findall(r'X-Plex-Token=(\w+)', string)+['.'.join(m.group(0).split('.')[2:]) for m, _ in zip(re.finditer(r'((\d+\.){3}\d+)' , string) , range(1))]
+    for match in test:
+        string = string.replace(match , 'xxx')
+    return templog(string , *args , **kwargs)
+
+Log.Info = log
+
 #####################################################################
 
 class LoginException(Exception):
@@ -279,7 +289,7 @@ def getPlexServerUrlData():
         port = data.get('publicPort')
         adress = Network.PublicAddress
     
-    Log.Info("Mapping data myPlex : %s" %dataStr)
+    Log.Info("Mapping data myPlex : adress=%s , port=%s , authtoken=%s" % (adress , port , authToken))
     
     return (adress , port , authToken)
 
