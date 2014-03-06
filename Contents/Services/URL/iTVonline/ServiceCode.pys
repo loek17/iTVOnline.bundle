@@ -184,8 +184,8 @@ def HTTPLiveStreamPlayList(m3u8_url):
     
     Log.Info(playlist)
     
-    authToken = getPlexAuthToken()
-    callbackUrl = 'http://%s:32400%%s%s' % ((Network.PublicAddress , '&X-Plex-Token=%s' % authToken) if authToken else (Network.Address , ''))
+    plexServerData = getPlexServerUrlData()
+    callbackUrl = 'http://%s:%s%%s%s' % plexServerData
     newPlaylist = []
     for line in playlist.splitlines():
         if line.startswith('#'):
@@ -196,7 +196,7 @@ def HTTPLiveStreamPlayList(m3u8_url):
         else:
             if not line.startswith('http'):
                 line = m3u8_url.rsplit('/' , 1)[0] + '/' + line
-            newLine = callbackUrl % Callback(HTTPLiveSteamChunkList , url = line , bandwidth=bandwidth , authToken=authToken, ext='m3u8')
+            newLine = callbackUrl % Callback(HTTPLiveSteamChunkList , url = line , bandwidth=bandwidth , authToken=plexServerData[2], ext='m3u8')
             newPlaylist.append(newLine)
     
     newPlaylist = '\n'.join(newPlaylist)+'\n'
@@ -220,7 +220,7 @@ def HTTPLiveSteamChunkList(url , bandwidth , authToken):
             if DecryptKeyUrlRegex.match(line):
                 # proxy the decrypte key because the server is on a kpn network, the client isn't always
                 decrypteUrl = DecryptKeyUrlRegex.search(line).group("decrypte_url")
-                line = line.replace(decrypteUrl , Callback(HTTPLiveSteamPassword , url=decrypteUrl) + ('&X-Plex-Token=%s' % authToken if authToken else ''))
+                line = line.replace(decrypteUrl , Callback(HTTPLiveSteamPassword , url=decrypteUrl) + authToken)
             newPlaylist.append(line)
             continue
         else:
@@ -263,21 +263,25 @@ def GetCDN(url):
 #####################################################################
 
 import urllib
-def getPlexAuthToken():
-    """ get the plextoken to use if the client isn't local, is there a better why to do this?? """
+def getPlexServerUrlData():
+    """ Return a tulp containing the  server ip , server port , and authtoken (authtoken is preflixed with '&X-Plex-Token=')"""
     try:
         dataStr = urllib.urlopen('http://localhost:32400/myplex/account').read()
         data = XML.ElementFromString(dataStr)
         if data.get('mappingState') != "mapped":
             raise Exception('dummy')
     except:
-        authToken = None
+        authToken = ""
+        port = "32400"
+        adress = Network.Address
     else:
-        authToken = data.get('authToken')
+        authToken = '&X-Plex-Token=%s' % data.get('authToken')
+        port = data.get('publicPort')
+        adress = Network.PublicAddress
     
     Log.Info("Mapping data myPlex : %s" %dataStr)
     
-    return authToken
+    return (adress , port , authToken)
 
 from datetime import datetime
 import urllib
