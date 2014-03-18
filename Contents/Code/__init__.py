@@ -1,9 +1,9 @@
 #####################################################################
 #
-# File:        __init__.py
-# Author:   Loek Wensveen
-# Date:      03/01/2014
-# Version: 1.0.0
+# File:         __init__.py
+# Author:       Loek Wensveen
+# Date:         03/01/2014
+# Version:      1.0.0
 # About:        This plugin alows jou to watch itvonline in plex form kpn
 #
 #####################################################################
@@ -337,11 +337,57 @@ def MainMenu():
                 summary = u"Beheer en verwijder uw opnames met Plex.",
                 thumb = R(ICON_OPNAMES)
             ),
-            PrefsObject(title=u"Instellingen" , summary=u"Selecteer uw provider en andere opties.")
+            PrefsObject(
+                title=u"Instellingen" , 
+                summary=u"Selecteer uw provider en andere opties."
+            ),
+            PopupDirectoryObject(
+                key = Callback(AskUpdate),
+                title = u"Update",
+                summary = u"Download de laatste versie van de plugin van github.\n\n This may take some time"
+            )
         ]
     )
     return oc
-    
+
+#####################################################################
+
+@route(VIDEO_PREFIX + '/askupdate')
+def AskUpdate():
+    Log.Info("##########################  AskUpdate  #################################")
+    oc = ObjectContainer(
+        objects = [
+            DirectoryObject(
+                key = Callback(Update , force=False),
+                title = u"Check and install update",
+            ),
+            DirectoryObject(
+                key = Callback(Update , force=True),
+                title = u"Force update",
+            ),
+            DirectoryObject(
+                key = Callback(dummy),
+                title = u"Back",
+            )
+        ]
+    )
+    return oc
+
+@route(VIDEO_PREFIX + '/update' , force=bool)
+def Update(force=False):
+    Log.Info("##########################  Update  #################################")
+    import autoUpdate
+    autoUpdate.update(force)
+    try:
+        pass#autoUpdate.update(force)
+    except autoUpdate.UpToDateException , e:
+        Log.Exception(e)
+        return ObjectContainer(header=u"All up to date." , message=u"U gebruik al de laatste versie van de plugin, update is niet nodig.")
+    except autoUpdate.UpdateException , e:
+        Log.Exception(e)
+        return ObjectContainer(header=u"Update Error!" , message=unicode(e))
+    return ObjectContainer(header=u"Done" , message="De laatste versie is geinstalleerd")
+
 #####################################################################
 
 @route(VIDEO_PREFIX + '/channels')
@@ -480,18 +526,14 @@ def ProgramOptions(id):
             VideoClipObject(
                 url = PLAY_CHANNEL_URL() % program[u'channelId'],
                 title = u"Nu Bekijken",
-                summary = u'%s\n%s\n\n%s' % (program[u'title'] , program[u'subtitle'] , program[u'longdescription']),
-                thumb = R(CHANNEL_LIST[program[u'channelId']][u'thumb']),
-                art = R(CHANNEL_LIST[program[u'channelId']][u'art'])
+                summary = u'%s\n%s\n\n%s' % (program[u'title'] , program[u'subtitle'] , program[u'longdescription'])
             )
         )
     oc.add(
         DirectoryObject(
             key = Callback(RecordProgram , externalChannelId=program[u'externalChannelId'] , programRefNr=program[u'externalContentId'] , programStartTime=program[u'starttime']*1000),
             title = u"Nu Opnemen" if program[u'starttime'] < time and program[u'endtime'] > time else u"Opnamen Plannen",
-            summary = u'%s\n%s\n\n%s' % (program[u'title'] , program[u'subtitle'] , program[u'longdescription']),
-            thumb = R(CHANNEL_LIST[program[u'channelId']][u'thumb']),
-            art = R(CHANNEL_LIST[program[u'channelId']][u'art'])
+            summary = u'%s\n%s\n\n%s' % (program[u'title'] , program[u'subtitle'] , program[u'longdescription'])
         )
     )
     return oc
@@ -903,8 +945,6 @@ def GetRecodings(type=u"ALL"):
         u'stateOfRecording': type
     }
     url = buildURL(API_URL() , prams)
-    
-    LogCookies()
     
     epg = JSON.ObjectFromURL(url , cacheTime=0)
     Log.Info(epg)
