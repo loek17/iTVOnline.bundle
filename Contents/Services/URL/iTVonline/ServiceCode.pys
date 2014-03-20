@@ -44,6 +44,7 @@ eHLS_CLIENTS = [
 templog = Log.Info
 import re
 def log(string , *args , **kwargs):
+    string = str(string)
     test = re.findall(r'X-Plex-Token=(\w+)', string)+['.'.join(m.group(0).split('.')[2:]) for m, _ in zip(re.finditer(r'((\d+\.){3}\d+)' , string) , range(1))]
     for match in test:
         string = string.replace(match , 'xxx')
@@ -115,6 +116,7 @@ def NormalizeURL(url):
     return url
     
 def MetadataObjectForURL(url):
+    Log.Info("########################## iTVonline - MetadataObjectForURL ############################")
     time = int(Datetime.TimestampFromDatetime(Datetime.Now()))
     prams = {
         'action' : 'GetEpg',
@@ -172,6 +174,7 @@ def PlayHTTPLiveStream(url):
         #return ObjectContainer(header=u"Error" , message=unicode(e))
     except:
         Log.Exception('Error in getting CDN')
+        raise Ex.MediaNotAvailable
     
     if m3u8_url == "http://fl.media01.kpnstreaming.nl/vod/_definst_/kpn/itvonline/MTP-WEBTV-IPAD/KPNVIDEOS/INTRO/video-3.mp4/playlist.m3u8":
         Log.Info("############## Ex.MediaNotAvailable ###############")
@@ -196,6 +199,7 @@ def HTTPLiveStreamPlayList(m3u8_url):
     
     plexServerData = getPlexServerUrlData()
     callbackUrl = 'http://%s:%s%%s%s' % plexServerData
+    #callbackUrl = '%%s%s' % plexServerData[2]
     newPlaylist = []
     for line in playlist.splitlines():
         if line.startswith('#'):
@@ -205,7 +209,11 @@ def HTTPLiveStreamPlayList(m3u8_url):
             continue
         else:
             if not line.startswith('http'):
-                line = m3u8_url.rsplit('/' , 1)[0] + '/' + line
+                if line.startswith('/'):
+                    parts = m3u8_url.split('//' , 1)
+                    line = parts[0]+'//'+parts[1].split('/', 1)[0] + line
+                else:
+                    line = m3u8_url.rsplit('/' , 1)[0] + '/' + line
             newLine = callbackUrl % Callback(HTTPLiveSteamChunkList , url = line , bandwidth=bandwidth , authToken=plexServerData[2], ext='m3u8')
             newPlaylist.append(newLine)
     
@@ -235,7 +243,11 @@ def HTTPLiveSteamChunkList(url , bandwidth , authToken):
             continue
         else:
             if not line.startswith('http'):
-                 newLine = url.rsplit('/' , 1)[0] + '/' + line
+                if line.startswith('/'):
+                    parts = url.split('//' , 1)
+                    newLine = parts[0]+'//'+parts[1].split('/', 1)[0] + line
+                else:
+                    newLine = url.rsplit('/' , 1)[0] + '/' + line
             newPlaylist.append(newLine)
 
     newPlaylist = '\n'.join(newPlaylist) + '\n'
